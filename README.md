@@ -1,122 +1,151 @@
-# macOS 代码签名与公证
+<div align="center">
+  <img src="resources/icon.png" width="96" height="96" alt="Goodable Logo" />
+  <h1>Goodable</h1>
 
-对 Goodable macOS 应用进行代码签名和 Apple 公证，消除安装时的安全警告。
+  <p>
+    面向非技术人群的 <b>AI 编程桌面应用</b>：开箱即用（内置 Node.js + Python 运行时），集成 ClaudeCode SDK，内置高质量模板与一键发布能力。
+  </p>
 
-## 目录结构
+  <p>
+    <a href="https://goodable.cn">goodable.cn</a> ·
+    <a href="https://github.com/ImGoodBai/goodable/releases">Releases</a> ·
+    <a href="https://github.com/ImGoodBai/goodable/issues">Issues</a>
+  </p>
 
-```
-tools/macos-signing/
-├── README.md                      # 本文档
-├── sign-notarize.sh              # 签名脚本
-├── entitlements/                  # 权限配置
-│   ├── main.plist                 # 主应用
-│   └── inherit.plist              # 子组件
-└── credentials/                   # 敏感文件（不进 git）
-    ├── .gitkeep
-    └── developer-id-cert.p12      # 证书（你自己放）
-```
+  <p>
+    <img alt="release" src="https://img.shields.io/github/v/release/ImGoodBai/goodable" />
+    <img alt="license" src="https://img.shields.io/github/license/ImGoodBai/goodable" />
+    <img alt="stars" src="https://img.shields.io/github/stars/ImGoodBai/goodable?style=flat" />
+  </p>
+</div>
 
-## 一次性配置
+---
 
-### 1. 导出证书
+## 立即下载（推荐）
 
-1. 打开"钥匙串访问" → "登录" → "我的证书"
-2. 找到 "Developer ID Application: Shaxing handy..."
-3. 右键 → "导出..." → 格式选 `.p12`
-4. 保存到 `tools/macos-signing/credentials/developer-id-cert.p12`
-5. 设置导出密码并记住
+> 一键下载安装包即可使用，无需本地配置 Python / Node.js。
 
-### 2. 配置 notarytool
+| macOS (Apple Silicon / ARM) | macOS (Intel / x86) | Windows |
+|---|---|---|
+| [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) |
 
+**说明**：进入 Release 页面后，选择对应平台的安装包下载即可。
+
+---
+
+## Goodable 是什么？
+
+Goodable 是一个“给普通人用的 AI 编程工具箱”。
+
+你可以把它理解为：**一套可持续迭代的模板市场 + 强力代码生成/改造能力 + 一键发布能力**，把“会用 AI”变成“能交付应用”。
+
+![Goodable 首页](public/screenshot/01.png)
+
+---
+
+### 你能用它做什么？
+
+- **把 Coze 工作流一键变成网站**（coze2app）
+- **把飞书文档一键变成网站**（Feishu Doc → Web）
+- **一键发布到阿里云 + 绑定域名**（两分钟上线一个可访问的网站）
+- **万能短视频下载**（覆盖国内主流平台）
+- **微信群助手机器人** 等常用业务模板
+- 以及：持续新增/更新的“可直接跑”的源代码模板库
+
+---
+
+## 核心特性（为非技术用户设计）
+
+- **开箱即用**：内置 Node.js + Python 运行时，尽量不让你被环境折腾
+- **更强的编程能力**：集成 **ClaudeCode SDK**，适合做“真实工程”的生成、改造与维护
+- **模板市场**：一键导入模板；后续可持续拉取新模板/更新
+- **一键发布**：阿里云发布 + 域名绑定，把“跑起来”变成“上线可访问”
+- **工程化**：模板不是演示代码，是可落地的工程骨架，方便二次开发与交付
+
+---
+
+## 截图预览
+
+> 你提供的路径如下。
+
+| 模板市场 | 万能视频下载 |
+|---|---|
+| ![](public/screenshot/02.png) | ![](public/screenshot/07.png) |
+
+| 阿里云发布 | 配置页 |
+|---|---|
+| ![](public/screenshot/03.png) | ![](public/screenshot/04.png) |
+
+| coze2app | 飞书 → 网站 |
+|---|---|
+| ![](public/screenshot/05.png) | ![](public/screenshot/06.png) |
+
+
+---
+
+## 使用方式
+
+### 快速体验：下载安装到可用（推荐）
+1. 打开 Release： https://github.com/ImGoodBai/goodable/releases/latest
+2. 下载对应平台安装包
+3. 安装后直接运行
+
+### 深度研究：源码运行（3 步）
 ```bash
-xcrun notarytool store-credentials "goodable-notary" \
-  --apple-id "admin@xxxxxx.cc" \
-  --team-id "3HNxxxxx6W5" \
-  --password "你的App专用密码"
+git clone https://github.com/ImGoodBai/goodable.git
+cd goodable
+npm install
+npm run dev:electron
 ```
 
-## 使用方法
+## 模板与能力清单（内置）
 
-### 完整流程（签名 + 公证）
+* **coze2app**：Coze 工作流一键转网站
+* **Feishu Doc → Web**：飞书文档一键转网站
+* **万能短视频下载**：支持国内主流平台
+* **微信群助手机器人**：常用业务骨架模板
+* 以及更多可持续更新的模板（支持一键导入 + 后续持续拉取新模板）
 
-```bash
-# 直接传目录（自动找 *-mac.zip）
-./tools/macos-signing/sign-notarize.sh ~/Downloads/goodable-macos-x64-v0.5.0/
+---
 
-# 或传 ZIP 文件
-./tools/macos-signing/sign-notarize.sh ~/Downloads/Goodable-0.5.0-mac.zip
+## Roadmap（路线图）
 
-# 或传 GitHub artifact ZIP（自动解压内层）
-./tools/macos-signing/sign-notarize.sh ~/Downloads/goodable-macos-arm64-main-0.5.0.zip
-```
+> 方向只有一个：让“普通人使用 AI”从写代码，变成“持续交付应用”。
 
-### 跳过签名（仅公证，用于重试）
+* **更多一键发布**
 
-```bash
-./tools/macos-signing/sign-notarize.sh --skip-sign ~/Downloads/goodable-sign-work/20260107-103000-x64
-```
+  * 一键发布到：微信小程序 / 支付宝小程序 / 抖音小程序 / 快应用（规划）
+  * 一键生成并发布：Android / iOS App（规划）
+* **更强的“复刻/重构”能力**
 
-## 输出结果
+  * 一键复刻任意网站（参考 open-lovable 的体验，但更偏“可交付工程”）
+  * 从“克隆 UI”升级为“复刻产品能力 + 数据结构 + 部署形态”
+* **模板市场升级**
 
-成功后在 `~/Downloads/goodable-sign-work/<时间戳>-<架构>/` 生成：
+  * 支持用户上架模板（模板分发、评分、版本、变更日志）
+  * 模板市场达到 **100 款可交付应用**（对应「100agent」计划：我会持续开发/开源 100 个 agent/应用模板）
+* **更好的非技术体验**
 
-- `Goodable-x.x.x-<架构>-notarized.dmg` - 已公证的安装包
-- `Goodable.app` - 已签名 + 公证的应用
+  * “一键完成环境/密钥/发布”引导式向导
+  * 内置诊断与修复（端口、依赖、权限、发布失败自动定位）
 
-示例：
-```
-~/Downloads/goodable-sign-work/20260107-103000-x64/
-├── Goodable-0.5.0-x64-notarized.dmg
-└── Goodable.app/
-```
+---
 
-## 工作原理
+## 文档与支持
 
-脚本会：
+* 联系： [我是古德白](https://goodable.cn)
+* 使用/反馈：GitHub Issues（建议附截图/日志）
+* 贡献：见 `CONTRIBUTING.md`
+* 安全：见 `SECURITY.md`
 
-1. 解压 ZIP → 清理扩展属性 → 删除备份文件
-2. 签名所有 Mach-O 二进制（.dylib/.so/.node/可执行文件等）
-3. 签名 Frameworks 和 Helper Apps
-4. 签名主 App
-5. 提交 Apple 公证（5-10 分钟）
-6. 将公证票据钉到 App
-7. 打包成 DMG
+---
 
-## 故障排查
+## License
 
-### 公证失败
+当前仓库为 **MIT License**
 
-```bash
-# 查看详细日志
-xcrun notarytool log <SUBMISSION_ID> --keychain-profile goodable-notary
-```
+---
 
-### 验证签名
+## 免责声明
 
-```bash
-spctl -a -vv --type execute /Applications/Goodable.app
-codesign -dv --verbose=4 /Applications/Goodable.app
-```
-
-## 注意事项
-
-- ⚠️ **证书文件 (.p12) 绝对不要提交到 git**（已在 .gitignore 排除）
-- ⚠️ **证书有效期 5 年**，到期前需续期
-- ⚠️ **备份证书和密码**到密码管理器（如 1Password）
-- ✅ ARM64 版本用同样的命令签名
-- ✅ DMG staple 失败是正常的（App 本身成功即可）
-
-## GitHub Actions 自动签名（可选）
-
-需私有仓库支持 Secrets。在仓库设置中添加：
-
-- `CSC_LINK` - 证书 base64（`base64 -i cert.p12`）
-- `CSC_KEY_PASSWORD` - 证书密码
-
-已在 `.github/workflows/build-mac-*.yml` 配置。
-
-## 技术参考
-
-- [Apple TN2206: macOS Code Signing](https://developer.apple.com/library/archive/technotes/tn2206/)
-- [Hardened Runtime](https://developer.apple.com/documentation/xcode/configuring-the-hardened-runtime)
-- [Notarizing macOS Software](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+* 请在遵守各平台协议与当地法律法规的前提下使用相关能力（例如：内容下载、自动化发布、机器人等场景）。

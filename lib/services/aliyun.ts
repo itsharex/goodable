@@ -101,6 +101,7 @@ export async function prepareAliyunDependencies(
   return new Promise((resolve, reject) => {
     const args = [
       'install',
+      '-i', 'https://mirrors.aliyun.com/pypi/simple/',
       '-r', 'requirements.txt',
       '-t', 'fc_deps',
       '--platform', 'manylinux2014_x86_64',

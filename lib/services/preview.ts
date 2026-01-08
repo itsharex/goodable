@@ -30,9 +30,9 @@ const PACKAGE_MANAGER_COMMANDS: Record<
   PackageManagerId,
   { command: string; installArgs: string[] }
 > = {
-  npm: { command: npmCommand, installArgs: ['install'] },
-  pnpm: { command: pnpmCommand, installArgs: ['install'] },
-  yarn: { command: yarnCommand, installArgs: ['install'] },
+  npm: { command: npmCommand, installArgs: ['install', '--registry=https://registry.npmmirror.com'] },
+  pnpm: { command: pnpmCommand, installArgs: ['install', '--registry=https://registry.npmmirror.com'] },
+  yarn: { command: yarnCommand, installArgs: ['install', '--registry=https://registry.npmmirror.com'] },
   bun: { command: bunCommand, installArgs: ['install'] },
 };
 

@@ -1,0 +1,23 @@
+[
+  {
+    "keyword": "做一个万能短视频下载工具",
+    "templateId": "gooddowner"
+  },
+  {
+    "keyword": "做一个coze工作流一键变网站的工具",
+    "templateId": "coze2app_py"
+  },
+  {
+    "keyword": "做一个飞书文档一键变网站的工具",
+    "templateId": "feishu2app"
+  },
+  {
+    "keyword": "做一个微信群智能助手",
+    "templateId": "goodqunbot"
+  },
+  {
+    "keyword": "Mac帮古德白写一个helloworld",
+    "sourceProjectId": "project-1767525978443-uyw1qigzy3h",
+    "deployedUrl": "http://hello.suishouai.cn"
+  }
+]

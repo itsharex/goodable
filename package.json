@@ -1,0 +1,183 @@
+{
+  "name": "goodable",
+  "version": "0.5.1",
+  "description": "AI-Powered Web App Builder - Build apps with natural language using Claude Code, Cursor, and more",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "npm run type-check && node scripts/run-web.js",
+    "dev:web": "npm run type-check && node scripts/run-web.js",
+    "dev:desktop": "npm run type-check && node scripts/run-desktop.js",
+    "dev:electron": "npm run dev:desktop",
+    "ensure:env": "node scripts/setup-env.js",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio",
+    "check-cli": "node scripts/check-claude-cli.js",
+    "postinstall": "npm run ensure:env"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.69",
+    "@paralleldrive/cuid2": "^3.0.4",
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^12.5.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.1",
+    "framer-motion": "^11.11.17",
+    "highlight.js": "^11.10.0",
+    "lucide-react": "^0.460.0",
+    "next": "^15.5.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-markdown": "^10.0.0",
+    "tree-kill": "^1.2.2",
+    "ws": "^8.18.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
+    "autoprefixer": "^10.4.20",
+    "cross-env": "^10.1.0",
+    "drizzle-kit": "^0.31.8",
+    "electron": "^39.0.0",
+    "electron-builder": "^25.1.6",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "15.1.0",
+    "postcss": "^8.4.49",
+    "prettier": "^3.4.2",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "ai",
+    "claude",
+    "cursor",
+    "app-builder",
+    "nextjs",
+    "code-generation",
+    "no-code",
+    "low-code"
+  ],
+  "author": "Goodable Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ImGoodBai/goodable.git"
+  },
+  "build": {
+    "appId": "com.goodable.desktop",
+    "productName": "Goodable",
+    "npmRebuild": false,
+    "files": [
+      "electron/**/*",
+      ".next/standalone/**/*",
+      "!**/*.md",
+      "!**/*.ts",
+      "!**/*.tsx",
+      "!.next/standalone/md/**/*",
+      "!.next/standalone/tests/**/*",
+      "!.next/standalone/scripts/**/*",
+      "!.next/standalone/Changelog.md",
+      "!.next/standalone/CLAUDE.md",
+      "!.next/standalone/step.md",
+      "!.next/standalone/RDME_ELECTRON.md",
+      "!.next/standalone/README_CLOSED_ENDDOC.md",
+      "!.next/standalone/dist/**/*",
+      "!.next/standalone/node_modules/**/*",
+      "!.next/standalone/data/**/*",
+      "!.next/standalone/.next/cache/**/*",
+      "!.next/standalone/prisma-hidden/**/*",
+      "!.next/standalone/prisma/**/*",
+      "!.next/standalone/python-runtime/**/*",
+      "!.next/standalone/logs/**/*",
+      "!.next/standalone/*.log",
+      "!.next/standalone/templates/**/.next/cache/**/*",
+      ".next/static/**/*",
+      "public/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      ".next/standalone/**/*",
+      "!.next/standalone/node_modules/**/*",
+      "!.next/standalone/data/**/*",
+      "!.next/standalone/.next/cache/**/*",
+      "!.next/standalone/prisma-hidden/**/*",
+      "!.next/standalone/prisma/**/*",
+      "!.next/standalone/python-runtime/**/*",
+      "!.next/standalone/logs/**/*",
+      "!.next/standalone/*.log",
+      "!.next/standalone/templates/**/.next/cache/**/*",
+      "node_modules/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": ".next/static",
+        "to": ".next/static"
+      },
+      {
+        "from": "public",
+        "to": "public"
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "lib/db/migrations",
+        "to": "migrations"
+      },
+      {
+        "from": "templates/goodqunbot/project/wxauto_lib",
+        "to": "templates/goodqunbot/project/wxauto_lib",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "directories": {
+      "buildResources": "resources",
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
+  }
+}

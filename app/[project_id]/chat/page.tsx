@@ -316,9 +316,10 @@ export default function ChatPage() {
   const [currentRoute, setCurrentRoute] = useState<string>('/');
   const [previewError, setPreviewError] = useState<string | null>(null);
   // Plan/Todo 标签状态
-  const [activePreviewTab, setActivePreviewTab] = useState<'none' | 'plan' | 'todo'>('none');
+  const [activePreviewTab, setActivePreviewTab] = useState<'none' | 'activity' | 'todo'>('none');
   const [planContent, setPlanContent] = useState<string | null>(null);
   const [currentTodos, setCurrentTodos] = useState<Array<{ content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm?: string }>>([]);
+  const [fileChanges, setFileChanges] = useState<Array<{ type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string }>>([]);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ requestId: string } | null>(null);
   const approvedRequestIdsRef = useRef<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -2640,7 +2641,7 @@ const persistProjectPreferences = useCallback(
                   } else {
                     setPendingPlanApproval({ requestId });
                   }
-                  setActivePreviewTab('plan');
+                  setActivePreviewTab('activity');
                 }}
                 onPlanApproved={(requestId) => {
                   approvedRequestIdsRef.current.add(requestId);
@@ -2649,6 +2650,15 @@ const persistProjectPreferences = useCallback(
                 }}
                 onTodoUpdate={(todos) => {
                   setCurrentTodos(todos);
+                }}
+                onFileChange={(change) => {
+                  setFileChanges(prev => {
+                    const updated = [...prev, change];
+                    // 限制最多保留100条，超出时移除最旧的
+                    return updated.length > 100 ? updated.slice(-100) : updated;
+                  });
+                  // 有新的代码变更时，如果当前没有显示任何标签，自动显示执行动态标签
+                  setActivePreviewTab(current => current === 'none' ? 'activity' : current);
                 }}
                 onDemoStart={(deployedUrl) => {
                   console.log('[DemoMode] Demo started, deployedUrl:', deployedUrl);
@@ -3299,11 +3309,12 @@ const persistProjectPreferences = useCallback(
                   </div>
                 ) : (
                   <div className="h-full w-full flex items-center justify-center bg-gray-50 relative">
-                    {/* Plan/Todo 标签面板 */}
-                    {(planContent || currentTodos.length > 0) && activePreviewTab !== 'none' && (
+                    {/* Plan/Todo/Code 标签面板 */}
+                    {(planContent || currentTodos.length > 0 || fileChanges.length > 0) && activePreviewTab !== 'none' && (
                       <PreviewTabs
                         planContent={planContent}
                         todos={currentTodos}
+                        fileChanges={fileChanges}
                         activeTab={activePreviewTab}
                         onTabChange={setActivePreviewTab}
                         pendingApproval={!!pendingPlanApproval}
@@ -3325,23 +3336,28 @@ const persistProjectPreferences = useCallback(
                       />
                     )}
                     {/* 标签按钮（当有内容但未选中时显示） */}
-                    {(planContent || currentTodos.length > 0) && activePreviewTab === 'none' && (
+                    {(planContent || currentTodos.length > 0 || fileChanges.length > 0) && activePreviewTab === 'none' && (
                       <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-                        {planContent && (
+                        {/* 执行动态按钮 - 放在第一位 */}
+                        {(planContent || fileChanges.length > 0) && (
                           <button
-                            onClick={() => setActivePreviewTab('plan')}
+                            onClick={() => setActivePreviewTab('activity')}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                               pendingPlanApproval
                                 ? 'bg-gray-200 text-gray-900'
                                 : 'bg-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                             }`}
                           >
-                            设计文档
+                            执行动态
+                            <span className="text-gray-400">
+                              {(planContent ? 1 : 0) + fileChanges.length}
+                            </span>
                             {pendingPlanApproval && (
                               <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
                             )}
                           </button>
                         )}
+                        {/* 任务进度按钮 */}
                         {currentTodos.length > 0 && (
                           <button
                             onClick={() => setActivePreviewTab('todo')}

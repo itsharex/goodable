@@ -1,8 +1,10 @@
 /**
- * Demo Mode Service - 演示模式：关键词触发快速项目构建
+ * Demo Mode Service - 演示模式：关键词/模板触发快速项目构建
  *
  * 两层解耦设计：
- * 1. 触发层：关键词匹配 → 选择模板
+ * 1. 触发层：
+ *    - 关键词匹配 → 选择模板（慢速回放）
+ *    - 模板使用按钮 → 检测 mock.json 存在即触发（快速回放）
  * 2. 回放层：支持两种数据源
  *    - 模板目录 mock.json（优先）
  *    - 数据库 sourceProjectId（备选）
@@ -14,7 +16,6 @@ import { getTemplateById, extractZipTemplate } from '@/lib/services/template';
 import { createMessage, getMessagesByProjectId } from '@/lib/services/message';
 import { streamManager } from '@/lib/services/stream';
 import { serializeMessage } from '@/lib/serializers/chat';
-import { previewManager } from '@/lib/services/preview';
 import { PROJECTS_DIR_ABSOLUTE, TEMPLATES_DIR_ABSOLUTE } from '@/lib/config/paths';
 
 interface DemoConfig {
@@ -35,7 +36,25 @@ interface MockData {
   messages: MockMessage[];
 }
 
+// 回放速度类型
+export type ReplaySpeed = 'slow' | 'fast';
+
 let demoConfigCache: DemoConfig[] | null = null;
+
+/**
+ * 获取回放延迟配置
+ */
+function getReplayDelay(speed: ReplaySpeed): { base: number; random: number } {
+  if (speed === 'fast') {
+    const base = parseInt(process.env.DEMO_REPLAY_DELAY_FAST || '167', 10);
+    const random = parseInt(process.env.DEMO_REPLAY_DELAY_FAST_RANDOM || '166', 10);
+    return { base, random };
+  } else {
+    const base = parseInt(process.env.DEMO_REPLAY_DELAY_SLOW || '500', 10);
+    const random = parseInt(process.env.DEMO_REPLAY_DELAY_SLOW_RANDOM || '500', 10);
+    return { base, random };
+  }
+}
 
 /**
  * 加载演示配置
@@ -81,9 +100,55 @@ export async function matchDemoKeyword(instruction: string): Promise<DemoConfig 
 }
 
 /**
- * 从模板目录加载 mock.json
+ * 检测模板是否有 mock.json（用于模板使用时判断是否触发回放）
  */
-async function loadMockFromTemplate(templateId: string): Promise<MockMessage[] | null> {
+export async function checkTemplateHasMock(templateId: string): Promise<boolean> {
+  const template = await getTemplateById(templateId);
+  if (!template) return false;
+
+  const mockPath = path.join(template.templatePath, 'mock.json');
+  try {
+    await fs.access(mockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 验证文件路径是否安全（防止路径遍历攻击）
+ */
+function isValidFilePath(filePath: string): boolean {
+  // 禁止绝对路径
+  if (path.isAbsolute(filePath)) return false;
+  // 禁止路径遍历
+  const normalized = path.normalize(filePath);
+  if (normalized.startsWith('..') || normalized.includes('..')) return false;
+  return true;
+}
+
+/**
+ * 判断文件是否为文本文件（可读取内容展示）
+ */
+function isTextFile(filePath: string): boolean {
+  const textExtensions = [
+    '.js', '.jsx', '.ts', '.tsx', '.json', '.html', '.css', '.scss', '.less',
+    '.md', '.txt', '.py', '.java', '.go', '.rs', '.c', '.cpp', '.h', '.hpp',
+    '.sh', '.bash', '.zsh', '.yml', '.yaml', '.toml', '.ini', '.cfg', '.conf',
+    '.xml', '.svg', '.vue', '.svelte', '.astro', '.prisma', '.graphql', '.sql',
+    '.env', '.gitignore', '.dockerignore', '.editorconfig', '.prettierrc',
+    '.eslintrc', '.babelrc', 'Dockerfile', 'Makefile', 'requirements.txt',
+    'package.json', 'tsconfig.json', 'vite.config.ts', 'next.config.js',
+  ];
+  const ext = path.extname(filePath).toLowerCase();
+  const basename = path.basename(filePath);
+  return textExtensions.includes(ext) || textExtensions.includes(basename);
+}
+
+/**
+ * 从模板目录加载 mock.json，支持从真实文件读取内容
+ */
+async function loadMockFromTemplate(templateId: string, projectPath: string): Promise<MockMessage[] | null> {
   const template = await getTemplateById(templateId);
   if (!template) return null;
 
@@ -91,10 +156,44 @@ async function loadMockFromTemplate(templateId: string): Promise<MockMessage[] |
   try {
     const content = await fs.readFile(mockPath, 'utf-8');
     const data: MockData = JSON.parse(content);
-    if (Array.isArray(data.messages) && data.messages.length > 0) {
-      console.log(`[DemoMode] Loaded ${data.messages.length} messages from mock.json`);
-      return data.messages;
+    if (!Array.isArray(data.messages) || data.messages.length === 0) {
+      return null;
     }
+
+    // 处理消息，如果需要从真实文件读取内容
+    const processedMessages: MockMessage[] = [];
+    for (const msg of data.messages) {
+      if (msg.role === 'tool' && msg.messageType === 'tool_use' && msg.metadata) {
+        const meta = msg.metadata as Record<string, unknown>;
+        const toolName = (meta.toolName as string || '').toLowerCase();
+        const filePath = meta.filePath as string;
+        const hasContent = meta.fileContent !== undefined && meta.fileContent !== null;
+
+        // 如果是 write 操作且没有 fileContent，从真实文件读取内容
+        if (toolName === 'write' && filePath && !hasContent && isTextFile(filePath) && isValidFilePath(filePath)) {
+          try {
+            // 构建真实文件路径（相对于项目目录）
+            const realFilePath = path.join(projectPath, filePath);
+            const fileContent = await fs.readFile(realFilePath, 'utf-8');
+            // 创建新的 metadata，添加 fileContent
+            const newMeta = { ...meta, fileContent };
+            processedMessages.push({
+              ...msg,
+              metadata: newMeta,
+            });
+            console.log(`[DemoMode] Auto-read file content: ${filePath}`);
+            continue;
+          } catch (err) {
+            console.warn(`[DemoMode] Failed to read file ${filePath}:`, err);
+            // fallback: 使用原始 metadata（没有 fileContent）
+          }
+        }
+      }
+      processedMessages.push(msg);
+    }
+
+    console.log(`[DemoMode] Loaded ${processedMessages.length} messages from mock.json`);
+    return processedMessages;
   } catch {
     // mock.json 不存在或格式错误
   }
@@ -103,6 +202,7 @@ async function loadMockFromTemplate(templateId: string): Promise<MockMessage[] |
 
 /**
  * 从数据库加载消息（复用现有服务）
+ * 适配数据库 metadata 格式到回放格式
  */
 async function loadMessagesFromDatabase(sourceProjectId: string): Promise<MockMessage[] | null> {
   const sourceMessages = await getMessagesByProjectId(sourceProjectId, 1000, 0);
@@ -118,6 +218,32 @@ async function loadMessagesFromDatabase(sourceProjectId: string): Promise<MockMe
         metadata = JSON.parse(msg.metadataJson);
       } catch {}
     }
+
+    // 适配数据库格式：toolInput.file_path → filePath, toolInput.content → fileContent
+    if (metadata && metadata.toolInput && typeof metadata.toolInput === 'object') {
+      const toolInput = metadata.toolInput as Record<string, unknown>;
+
+      // 提取文件路径
+      if (toolInput.file_path && !metadata.filePath) {
+        metadata.filePath = toolInput.file_path;
+      }
+
+      // 提取文件内容（Write工具）
+      if (toolInput.content && !metadata.fileContent) {
+        metadata.fileContent = toolInput.content;
+      }
+
+      // 提取旧字符串（Edit工具）
+      if (toolInput.old_string && !metadata.oldString) {
+        metadata.oldString = toolInput.old_string;
+      }
+
+      // 提取新字符串（Edit工具）
+      if (toolInput.new_string && !metadata.newString) {
+        metadata.newString = toolInput.new_string;
+      }
+    }
+
     return {
       role: msg.role as MockMessage['role'],
       messageType: msg.messageType as MockMessage['messageType'],
@@ -174,13 +300,17 @@ async function copyTemplateToProject(templateId: string, projectId: string): Pro
 
 /**
  * 回放消息（核心函数，解耦的第二层）
- * 支持 plan 模式自动确认
+ * 支持 plan 模式自动确认和速度配置
  */
 export async function replayMessages(
   messagesToReplay: MockMessage[],
   projectId: string,
-  requestId: string
+  requestId: string,
+  speed: ReplaySpeed = 'slow'
 ): Promise<void> {
+  const delayConfig = getReplayDelay(speed);
+  console.log(`[DemoMode] Replay speed: ${speed}, delay: ${delayConfig.base}-${delayConfig.base + delayConfig.random}ms`);
+
   // 找到最后一条 planning 消息的索引
   let lastPlanningIndex = -1;
   for (let i = messagesToReplay.length - 1; i >= 0; i--) {
@@ -197,8 +327,8 @@ export async function replayMessages(
     // 跳过用户消息
     if (msg.role === 'user') continue;
 
-    // 模拟延迟（500-1000ms随机）
-    const delay = 500 + Math.random() * 500;
+    // 根据速度配置模拟延迟
+    const delay = delayConfig.base + Math.random() * delayConfig.random;
     await new Promise(resolve => setTimeout(resolve, delay));
 
     // 创建新消息并保存到数据库
@@ -218,6 +348,29 @@ export async function replayMessages(
       data: serializeMessage(newMessage, { requestId }),
     });
 
+    // 检测 write/edit 工具并推送 file_change 事件
+    if (msg.role === 'tool' && msg.messageType === 'tool_use' && msg.metadata) {
+      const meta = msg.metadata as Record<string, unknown>;
+      const toolName = (meta.toolName as string || '').toLowerCase();
+      const filePath = meta.filePath as string;
+
+      if ((toolName === 'write' || toolName === 'edit') && filePath) {
+        const isWrite = toolName === 'write';
+        streamManager.publish(projectId, {
+          type: 'file_change',
+          data: {
+            type: isWrite ? 'write' : 'edit',
+            filePath,
+            content: isWrite ? (meta.fileContent as string) : undefined,
+            oldString: !isWrite ? (meta.oldString as string) : undefined,
+            newString: !isWrite ? (meta.newString as string) : undefined,
+            timestamp: new Date().toISOString(),
+            requestId,
+          }
+        });
+      }
+    }
+
     // 如果是最后一条 planning 消息，发送 planning_completed 并等待
     if (i === lastPlanningIndex) {
       console.log(`[DemoMode] Sending planning_completed for auto-confirm`);
@@ -232,8 +385,9 @@ export async function replayMessages(
         },
       });
 
-      // 延迟 1.5 秒，让前端短暂显示确认按钮
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 延迟让前端短暂显示确认按钮（快速模式缩短等待）
+      const planDelay = speed === 'fast' ? 500 : 1500;
+      await new Promise(resolve => setTimeout(resolve, planDelay));
 
       // 发送 plan_approved 状态，前端会清除确认按钮
       streamManager.publish(projectId, {
@@ -250,7 +404,7 @@ export async function replayMessages(
 }
 
 /**
- * 执行演示模式（模式1：templateId 模式）
+ * 执行演示模式（关键词触发，慢速）
  * 新建项目 + 复制模板 + 回放消息并保存
  */
 export async function executeDemoMode(
@@ -264,7 +418,7 @@ export async function executeDemoMode(
     return;
   }
 
-  console.log(`[DemoMode] Starting demo mode (templateId) for project ${projectId}`);
+  console.log(`[DemoMode] Starting demo mode (keyword trigger, slow) for project ${projectId}`);
 
   // 1. 发送 ai_thinking 状态
   streamManager.publish(projectId, {
@@ -282,8 +436,10 @@ export async function executeDemoMode(
     return;
   }
 
+  const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, projectId);
+
   // 3. 加载消息（优先 mock.json，备选数据库）
-  let messagesToReplay = await loadMockFromTemplate(config.templateId!);
+  let messagesToReplay = await loadMockFromTemplate(config.templateId!, projectPath);
 
   if (!messagesToReplay && config.sourceProjectId) {
     messagesToReplay = await loadMessagesFromDatabase(config.sourceProjectId);
@@ -298,8 +454,8 @@ export async function executeDemoMode(
     return;
   }
 
-  // 4. 回放消息（保存到数据库）
-  await replayMessages(messagesToReplay, projectId, requestId);
+  // 4. 回放消息（保存到数据库），关键词触发使用慢速
+  await replayMessages(messagesToReplay, projectId, requestId, 'slow');
 
   // 5. 发送完成状态
   streamManager.publish(projectId, {
@@ -307,16 +463,52 @@ export async function executeDemoMode(
     data: { status: 'ai_completed', requestId },
   });
 
-  // 6. 触发预览
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  try {
-    await previewManager.start(projectId);
-  } catch (error) {
-    console.error('[DemoMode] Failed to start preview:', error);
-  }
+  // 注意：不再自动触发预览，由用户手动点击预览按钮
 
   console.log(`[DemoMode] Demo mode completed for project ${projectId}`);
+}
+
+/**
+ * 执行演示模式（模板使用触发，快速）
+ * 用于模板卡片"使用"按钮触发的回放
+ */
+export async function executeDemoModeForTemplate(
+  templateId: string,
+  projectId: string,
+  requestId: string
+): Promise<void> {
+  console.log(`[DemoMode] Starting demo mode (template trigger, fast) for project ${projectId}`);
+
+  // 1. 发送 ai_thinking 状态
+  streamManager.publish(projectId, {
+    type: 'status',
+    data: { status: 'ai_thinking', requestId },
+  });
+
+  const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, projectId);
+
+  // 2. 加载消息（从 mock.json）
+  const messagesToReplay = await loadMockFromTemplate(templateId, projectPath);
+
+  if (!messagesToReplay || messagesToReplay.length === 0) {
+    console.log(`[DemoMode] No mock.json or empty messages for template: ${templateId}`);
+    streamManager.publish(projectId, {
+      type: 'status',
+      data: { status: 'ai_completed', requestId },
+    });
+    return;
+  }
+
+  // 3. 回放消息（保存到数据库），模板触发使用快速
+  await replayMessages(messagesToReplay, projectId, requestId, 'fast');
+
+  // 4. 发送完成状态
+  streamManager.publish(projectId, {
+    type: 'status',
+    data: { status: 'ai_completed', requestId },
+  });
+
+  console.log(`[DemoMode] Demo mode (template trigger) completed for project ${projectId}`);
 }
 
 /**

@@ -996,11 +996,12 @@ interface ChatLogProps {
   onPlanningCompleted?: (planMd: string, requestId: string, isApproved?: boolean) => void;
   onPlanApproved?: (requestId: string) => void;
   onTodoUpdate?: (todos: Array<{ content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm?: string }>) => void;
+  onFileChange?: (change: { type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string }) => void;
   onDemoStart?: (deployedUrl?: string) => void;
   isDemoReplay?: boolean;
 }
 
-export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onDemoStart, isDemoReplay }: ChatLogProps) {
+export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onFileChange, onDemoStart, isDemoReplay }: ChatLogProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
@@ -1746,6 +1747,11 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
           setIsInPlanMode(false);
           setPendingPlanApproval(null);
           setPendingPlanContent(null);
+          break;
+        }
+        case 'file_change': {
+          const data = envelope.data as { type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string; requestId?: string };
+          onFileChange?.(data);
           break;
         }
         case 'preview_error': {

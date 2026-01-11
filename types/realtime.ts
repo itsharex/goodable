@@ -94,6 +94,16 @@ export interface TaskEventInfo {
   error?: string;
 }
 
+export interface FileChangeInfo {
+  type: 'write' | 'edit';
+  filePath: string;
+  content?: string;       // Write 操作的完整内容
+  oldString?: string;     // Edit 操作的旧内容
+  newString?: string;     // Edit 操作的新内容
+  timestamp: string;
+  requestId?: string;
+}
+
 export type RealtimeEvent =
   | { type: 'message'; data: RealtimeMessage }
   | { type: 'status'; data: RealtimeStatus }
@@ -112,4 +122,5 @@ export type RealtimeEvent =
   | { type: 'task_started'; data: TaskEventInfo }
   | { type: 'task_completed'; data: TaskEventInfo }
   | { type: 'task_interrupted'; data: TaskEventInfo }
-  | { type: 'task_error'; data: TaskEventInfo };
+  | { type: 'task_error'; data: TaskEventInfo }
+  | { type: 'file_change'; data: FileChangeInfo };

@@ -203,11 +203,14 @@ export async function extractZipTemplate(zipPath: string, targetPath: string): P
     // Filter hidden files (like .DS_Store) and check for nested project directory
     const visibleEntries = entries.filter(e => !e.name.startsWith('.'));
 
-    // If only one visible entry and it's a 'project' directory (case-insensitive), unwrap it
-    if (visibleEntries.length === 1 &&
-        visibleEntries[0].isDirectory() &&
-        visibleEntries[0].name.toLowerCase() === 'project') {
-      const nestedProjectPath = path.join(targetPath, visibleEntries[0].name);
+    // Check if 'project' directory exists (ignore other directories like 'logs')
+    const projectEntry = visibleEntries.find(
+      e => e.isDirectory() && e.name.toLowerCase() === 'project'
+    );
+
+    // If 'project' directory exists, unwrap it
+    if (projectEntry) {
+      const nestedProjectPath = path.join(targetPath, projectEntry.name);
       const tempPath = path.join(targetPath, '..', `temp-${Date.now()}`);
 
       console.log(`[TemplateService] Detected nested 'project/' directory, unwrapping...`);

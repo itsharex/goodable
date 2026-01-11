@@ -1902,6 +1902,31 @@ ${basePrompt}`;
                 }
               }
 
+              // 检测 Write/Edit 工具并推送 file_change 事件
+              if (name && (name.toLowerCase() === 'write' || name.toLowerCase() === 'edit')) {
+                try {
+                  const toolInput = metadata.toolInput as any;
+                  if (toolInput && toolInput.file_path) {
+                    const isWrite = name.toLowerCase() === 'write';
+                    streamManager.publish(projectId, {
+                      type: 'file_change',
+                      data: {
+                        type: isWrite ? 'write' : 'edit',
+                        filePath: toolInput.file_path,
+                        content: isWrite ? toolInput.content : undefined,
+                        oldString: !isWrite ? toolInput.old_string : undefined,
+                        newString: !isWrite ? toolInput.new_string : undefined,
+                        timestamp: new Date().toISOString(),
+                        requestId,
+                      }
+                    });
+                    console.log('[ClaudeService] file_change event pushed:', name, toolInput.file_path);
+                  }
+                } catch (error) {
+                  console.error('[ClaudeService] Failed to push file_change event:', error);
+                }
+              }
+
               await dispatchToolMessage({
                 projectId,
                 metadata,
@@ -2270,6 +2295,31 @@ ${basePrompt}`;
                   }
                 } catch (error) {
                   console.error('[ClaudeService] Failed to format TodoWrite:', error);
+                }
+              }
+
+              // 检测 Write/Edit 工具并推送 file_change 事件（非流式）
+              if (name && (name.toLowerCase() === 'write' || name.toLowerCase() === 'edit')) {
+                try {
+                  const toolInput = metadata.toolInput as any;
+                  if (toolInput && toolInput.file_path) {
+                    const isWrite = name.toLowerCase() === 'write';
+                    streamManager.publish(projectId, {
+                      type: 'file_change',
+                      data: {
+                        type: isWrite ? 'write' : 'edit',
+                        filePath: toolInput.file_path,
+                        content: isWrite ? toolInput.content : undefined,
+                        oldString: !isWrite ? toolInput.old_string : undefined,
+                        newString: !isWrite ? toolInput.new_string : undefined,
+                        timestamp: new Date().toISOString(),
+                        requestId,
+                      }
+                    });
+                    console.log('[ClaudeService] file_change event pushed (non-streaming):', name, toolInput.file_path);
+                  }
+                } catch (error) {
+                  console.error('[ClaudeService] Failed to push file_change event:', error);
                 }
               }
 

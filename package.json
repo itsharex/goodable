@@ -160,6 +160,7 @@
       "output": "dist"
     },
     "mac": {
+      "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
       "target": [
         "dmg",
         "zip"
@@ -179,6 +180,7 @@
       ]
     },
     "win": {
+      "artifactName": "${productName}-Setup-${version}-x64.${ext}",
       "target": [
         {
           "target": "nsis",

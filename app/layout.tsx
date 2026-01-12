@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ backgroundColor: '#f9fafb' }}>
       <head />
-      <body className="bg-gray-50 text-gray-900 min-h-screen" suppressHydrationWarning>
+      <body className="bg-gray-50 text-gray-900 min-h-screen" style={{ backgroundColor: '#f9fafb' }} suppressHydrationWarning>
         <AuthProvider>
           <GlobalSettingsProvider>
             <Header />

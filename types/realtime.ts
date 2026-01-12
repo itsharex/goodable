@@ -104,6 +104,33 @@ export interface FileChangeInfo {
   requestId?: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}
+
+export interface ModelUsageDetail {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  costUSD?: number;
+}
+
+export interface ConversationStatsInfo {
+  projectId: string;
+  requestId?: string;
+  timestamp: string;
+  duration_ms?: number;
+  duration_api_ms?: number;
+  total_cost_usd?: number;
+  usage?: TokenUsage;
+  modelUsage?: Record<string, ModelUsageDetail>;
+  num_turns?: number;
+}
+
 export type RealtimeEvent =
   | { type: 'message'; data: RealtimeMessage }
   | { type: 'status'; data: RealtimeStatus }
@@ -123,4 +150,5 @@ export type RealtimeEvent =
   | { type: 'task_completed'; data: TaskEventInfo }
   | { type: 'task_interrupted'; data: TaskEventInfo }
   | { type: 'task_error'; data: TaskEventInfo }
-  | { type: 'file_change'; data: FileChangeInfo };
+  | { type: 'file_change'; data: FileChangeInfo }
+  | { type: 'conversation_stats'; data: ConversationStatsInfo };

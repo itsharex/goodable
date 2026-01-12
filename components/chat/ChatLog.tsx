@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { Brain } from 'lucide-react';
 import ToolResultItem from './ToolResultItem';
 import ThinkingSection from './ThinkingSection';
-import type { ChatMessage, RealtimeEvent, RealtimeStatus } from '@/types';
+import type { ChatMessage, RealtimeEvent, RealtimeStatus, ConversationStatsInfo } from '@/types';
 import { toChatMessage, normalizeChatContent } from '@/lib/serializers/client/chat';
 import { toRelativePath } from '@/lib/utils/path';
 
@@ -1050,6 +1050,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
   const [isInPlanMode, setIsInPlanMode] = useState<boolean>(false);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ requestId: string; messageId: string } | null>(null);
   const [pendingPlanContent, setPendingPlanContent] = useState<string | null>(null);
+  const [conversationStats, setConversationStats] = useState<ConversationStatsInfo | null>(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -1697,6 +1698,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
           setIsInPlanMode(false);
           setPendingPlanApproval(null);
           setPendingPlanContent(null);
+          setConversationStats(null);  // 清除旧的统计信息
           break;
         }
         case 'task_completed': {
@@ -1753,6 +1755,12 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         case 'file_change': {
           const data = envelope.data as { type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string; requestId?: string };
           onFileChange?.(data);
+          break;
+        }
+        case 'conversation_stats': {
+          const stats = envelope.data as ConversationStatsInfo;
+          console.log('[ChatLog] 📊 Received conversation stats:', stats);
+          setConversationStats(stats);
           break;
         }
         case 'preview_error': {
@@ -3477,6 +3485,44 @@ const ToolResultMessage = ({
             </div>
           </div>
         ))}
+
+        {/* Conversation Stats - 小尾巴样式 */}
+        {conversationStats && !isWaitingForResponse && (
+          <div className="mb-4 w-full pl-1">
+            <div className="text-[10px] text-gray-400 flex flex-wrap items-center gap-x-1">
+              {conversationStats.duration_ms !== undefined && (
+                <>
+                  <span>{(conversationStats.duration_ms / 1000).toFixed(1)}s</span>
+                  {conversationStats.duration_api_ms !== undefined && (
+                    <span className="text-gray-300">(API {(conversationStats.duration_api_ms / 1000).toFixed(1)}s)</span>
+                  )}
+                </>
+              )}
+              {conversationStats.total_cost_usd !== undefined && (
+                <>
+                  <span className="text-gray-300">/</span>
+                  <span>${conversationStats.total_cost_usd.toFixed(4)}</span>
+                </>
+              )}
+              {conversationStats.usage && (
+                <>
+                  <span className="text-gray-300">/</span>
+                  <span>{((conversationStats.usage.inputTokens || 0) / 1000).toFixed(1)}K in</span>
+                  <span>{((conversationStats.usage.outputTokens || 0) / 1000).toFixed(1)}K out</span>
+                  {conversationStats.usage.cacheReadInputTokens && conversationStats.usage.cacheReadInputTokens > 0 && (
+                    <span className="text-gray-300">({((conversationStats.usage.cacheReadInputTokens) / 1000).toFixed(1)}K cached)</span>
+                  )}
+                </>
+              )}
+              {conversationStats.num_turns !== undefined && (
+                <>
+                  <span className="text-gray-300">/</span>
+                  <span>{conversationStats.num_turns} turns</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         
         {/* Loading indicator for waiting response */}
         {isWaitingForResponse && (

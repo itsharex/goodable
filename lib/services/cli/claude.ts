@@ -2166,11 +2166,53 @@ ${basePrompt}`;
       } else if (message.type === 'result') {
         // Final result
         console.log('[ClaudeService] Task completed:', message.subtype);
+        console.log('[ClaudeService] 📊 Raw result message:', JSON.stringify(message, null, 2));
         try {
           await timelineLogger.logSDK(projectId, 'SDK generate end', 'info', requestId, { subtype: message.subtype }, 'sdk.generate.end');
           await timelineLogger.logSDK(projectId, '================== SDK 生成 END ==================', 'info', requestId, undefined, 'separator.sdk.generate.end');
         } catch { }
         timelineLogger.logSDK(projectId, 'SDK execution completed', 'info', requestId, { subtype: message.subtype }, 'sdk.completed').catch(() => { });
+
+        // 提取并发送对话统计信息
+        const resultMsg = message as any;
+        const statsData: Record<string, unknown> = {
+          projectId,
+          requestId,
+          timestamp: new Date().toISOString(),
+        };
+
+        if (typeof resultMsg.duration_ms === 'number') {
+          statsData.duration_ms = resultMsg.duration_ms;
+        }
+        if (typeof resultMsg.duration_api_ms === 'number') {
+          statsData.duration_api_ms = resultMsg.duration_api_ms;
+        }
+        if (typeof resultMsg.total_cost_usd === 'number') {
+          statsData.total_cost_usd = resultMsg.total_cost_usd;
+        }
+        if (resultMsg.usage && typeof resultMsg.usage === 'object') {
+          statsData.usage = resultMsg.usage;
+        }
+        if (resultMsg.modelUsage && typeof resultMsg.modelUsage === 'object') {
+          statsData.modelUsage = resultMsg.modelUsage;
+        }
+        if (typeof resultMsg.num_turns === 'number') {
+          statsData.num_turns = resultMsg.num_turns;
+        }
+
+        // 只有当存在有效统计字段时才发送事件
+        const hasStats = statsData.duration_ms !== undefined ||
+          statsData.total_cost_usd !== undefined ||
+          statsData.usage !== undefined ||
+          statsData.num_turns !== undefined;
+
+        if (hasStats) {
+          console.log('[ClaudeService] 📊 Conversation stats:', statsData);
+          streamManager.publish(projectId, {
+            type: 'conversation_stats',
+            data: statsData as any,
+          });
+        }
 
         // 发送 SDK 完成事件
         streamManager.publish(projectId, {

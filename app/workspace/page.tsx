@@ -46,14 +46,7 @@ function WorkspaceContent() {
   const [selectedModel, setSelectedModel] = useState<string>(getDefaultModelForCli(DEFAULT_ACTIVE_CLI));
   const [thinkingMode, setThinkingMode] = useState(false);
   const [projectType, setProjectType] = useState<'nextjs' | 'python-fastapi'>('python-fastapi');
-  const [workMode, setWorkMode] = useState<'code' | 'work'>(() => {
-    // 从 localStorage 读取上次的模式
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('workspace_work_mode');
-      return (saved === 'work' || saved === 'code') ? saved : 'code';
-    }
-    return 'code';
-  });
+  const [workMode, setWorkMode] = useState<'code' | 'work'>('code');
   const [work_directory, setWork_directory] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
   const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null);
@@ -111,6 +104,14 @@ function WorkspaceContent() {
       console.error('Failed to load templates:', error);
       // On error, show only online templates
       setTemplates(ONLINE_TEMPLATES);
+    }
+  }, []);
+
+  // Load workMode from localStorage on client side
+  useEffect(() => {
+    const saved = localStorage.getItem('workspace_work_mode');
+    if (saved === 'work' || saved === 'code') {
+      setWorkMode(saved);
     }
   }, []);
 

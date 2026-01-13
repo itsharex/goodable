@@ -5,9 +5,14 @@ import { PROJECTS_DIR_ABSOLUTE } from '@/lib/config/paths';
 
 export function serializeProject(project: ProjectEntity): Project {
   // 计算项目绝对路径（跨平台兼容）
-  const absolutePath = path.normalize(path.join(PROJECTS_DIR_ABSOLUTE, project.id));
+  // work 模式使用 work_directory，code 模式使用默认项目目录
+  const mode = (project as any).mode || 'code';
+  const work_directory = (project as any).work_directory;
+  const absolutePath = mode === 'work' && work_directory
+    ? path.normalize(work_directory)
+    : path.normalize(path.join(PROJECTS_DIR_ABSOLUTE, project.id));
 
-  // 获取项目类型（必须存在）
+  // 获取项目类型（work 模式可以是 default）
   const projectType = (project as any).projectType;
   if (!projectType) {
     throw new Error(`项目 ${project.id} 缺失 projectType 字段`);
@@ -30,9 +35,11 @@ export function serializeProject(project: ProjectEntity): Project {
     planConfirmed: (project as any).planConfirmed ?? false,
     dependenciesInstalled: (project as any).dependenciesInstalled ?? false,
     projectType,
-    absolutePath, // 添加项目绝对路径
-    latestRequestStatus: (project as any).latestRequestStatus ?? null, // 添加最新请求状态
-    deployedUrl: (project as any).deployedUrl ?? null, // 添加部署地址
+    absolutePath,
+    mode, // 添加项目模式
+    work_directory: work_directory ?? null, // 添加工作目录
+    latestRequestStatus: (project as any).latestRequestStatus ?? null,
+    deployedUrl: (project as any).deployedUrl ?? null,
   };
 }
 

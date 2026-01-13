@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -802,6 +802,32 @@ function registerIpcHandlers() {
       return { success: true };
     } catch (error) {
       console.error('打开外部链接失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 选择目录对话框
+  ipcMain.handle('select-directory', async (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return { success: false, error: '窗口不存在' };
+    }
+
+    try {
+      const result = await dialog.showOpenDialog(targetWindow, {
+        properties: ['openDirectory', 'createDirectory'],
+        title: '选择工作目录',
+        buttonLabel: '选择'
+      });
+
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      return { success: true, path: result.filePaths[0] };
+    } catch (error) {
+      console.error('选择目录失败:', error);
       return { success: false, error: error.message };
     }
   });

@@ -6,6 +6,8 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull(),
   description: text('description'),
   status: text('status').notNull().default('idle'),
+  mode: text('mode').notNull().default('code'), // 'code' | 'work'
+  work_directory: text('work_directory'), // 用户指定的工作目录（work模式）
   previewUrl: text('preview_url'),
   previewPort: integer('preview_port'),
   repoPath: text('repo_path'),

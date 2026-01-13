@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
     const preferredCli = String(body.preferredCli || body.preferred_cli || 'claude').toLowerCase();
     const requestedModel = body.selectedModel || body.selected_model;
     const projectType = body.projectType || body.project_type || 'nextjs';
+    const mode = body.mode || 'code'; // 'code' | 'work'
+    const work_directory = body.work_directory;
 
     const input: CreateProjectInput = {
       project_id: body.project_id,
@@ -44,12 +46,26 @@ export async function POST(request: NextRequest) {
       selectedModel: normalizeModelId(preferredCli, requestedModel ?? getDefaultModelForCli(preferredCli)),
       description: body.description,
       projectType,
+      mode,
+      work_directory,
     };
 
     // Validation
     if (!input.project_id || !input.name) {
       return createErrorResponse('project_id and name are required', undefined, 400);
     }
+
+    // work 模式需要 work_directory
+    if (mode === 'work' && !work_directory) {
+      return createErrorResponse('work_directory is required for work mode', undefined, 400);
+    }
+
+    // 关键调试日志
+    console.log(`[API] 📝 Creating project:`);
+    console.log(`  - project_id: ${input.project_id}`);
+    console.log(`  - mode: ${mode}`);
+    console.log(`  - projectType: ${projectType}`);
+    console.log(`  - work_directory: ${work_directory || 'N/A'}`);
 
     // 演示模式前置检测：sourceProjectId 模式直接跳转，不创建新项目
     if (input.initialPrompt) {

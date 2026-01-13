@@ -33,6 +33,12 @@ export class FileBrowserError extends Error {
 }
 
 function resolveRepoRoot(project: Project): string {
+  // work 模式优先使用 work_directory
+  if ((project as any).work_directory) {
+    return path.resolve((project as any).work_directory);
+  }
+
+  // code 模式使用 repoPath
   const repoPath =
     project.repoPath || path.join('data', 'projects', project.id);
   const absolutePath = path.isAbsolute(repoPath)

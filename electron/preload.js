@@ -47,7 +47,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   },
 
   // 打开外部链接
-  openExternal: (url) => ipcRenderer.invoke('open-external', url)
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // 选择目录
+  selectDirectory: () => ipcRenderer.invoke('select-directory')
 });
 
 // ==================== 自定义标题栏实现 ====================

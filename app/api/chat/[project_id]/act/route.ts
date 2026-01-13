@@ -367,8 +367,10 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
           instruction: storedInstruction || finalInstruction,
           cliPreference,
         });
+        // work 模式直接进入 processing 状态，不需要 planning
+        const projectMode = (project as any).mode || 'code';
         if (cliPreference === 'claude') {
-          if ((project as any).planConfirmed === true) {
+          if ((project as any).planConfirmed === true || projectMode === 'work') {
             await markUserRequestAsProcessing(requestId);
           } else {
             const { markUserRequestAsPlanning } = await import('@/lib/services/user-requests');
@@ -429,7 +431,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     // 预览启动由 SDK 完成后通过 sdk_completed 事件触发
     // 移除并行启动逻辑以避免竞态条件
 
-    if (cliPreference === 'claude' && (project as any).planConfirmed !== true) {
+    // work 模式直接执行，不需要规划阶段
+    const projectMode = (project as any).mode || 'code';
+    const needsPlanning = cliPreference === 'claude' && projectMode === 'code' && (project as any).planConfirmed !== true;
+
+    if (needsPlanning) {
       const sessionId = project.activeClaudeSessionId || undefined;
       generateClaudePlan(
         project_id,
@@ -484,7 +490,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({
       success: true,
-      message: cliPreference === 'claude' && (project as any).planConfirmed !== true ? '规划已开始' : 'AI执行已开始',
+      message: needsPlanning ? '规划已开始' : 'AI执行已开始',
       requestId,
       userMessageId: userMessage.id,
       conversationId: conversationId ?? null,

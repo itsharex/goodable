@@ -30,8 +30,10 @@ export function GeneralSettings({
   const [isExporting, setIsExporting] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [absolutePath, setAbsolutePath] = useState<string>('');
+  const [projectMode, setProjectMode] = useState<string>('');
+  const [projectType, setProjectType] = useState<string>('');
 
-  // 获取项目完整数据（包括绝对路径）
+  // 获取项目完整数据（包括绝对路径、模式、类型）
   useEffect(() => {
     if (!projectId || projectId === 'global-settings') return;
 
@@ -41,6 +43,8 @@ export function GeneralSettings({
         if (response.ok) {
           const data = await response.json();
           setAbsolutePath(data?.data?.absolutePath || '');
+          setProjectMode(data?.data?.mode || 'code');
+          setProjectType(data?.data?.projectType || '');
         }
       } catch (error) {
         console.error('Failed to fetch project path:', error);
@@ -267,6 +271,27 @@ export function GeneralSettings({
                 disabled
                 className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">项目模式</label>
+                <input
+                  type="text"
+                  value={projectMode === 'work' ? 'Work (文件操作)' : projectMode === 'code' ? 'Code (开发)' : projectMode}
+                  disabled
+                  className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">项目类型</label>
+                <input
+                  type="text"
+                  value={projectType === 'nextjs' ? 'Next.js' : projectType === 'python-fastapi' ? 'Python FastAPI' : projectType}
+                  disabled
+                  className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500"
+                />
+              </div>
             </div>
 
             <div>

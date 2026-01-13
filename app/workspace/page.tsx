@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatInput from '@/components/chat/ChatInput';
-import { Folder, HelpCircle, ShoppingBag, CheckCircle } from 'lucide-react';
+import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 import {
@@ -46,11 +46,15 @@ function WorkspaceContent() {
   const [selectedModel, setSelectedModel] = useState<string>(getDefaultModelForCli(DEFAULT_ACTIVE_CLI));
   const [thinkingMode, setThinkingMode] = useState(false);
   const [projectType, setProjectType] = useState<'nextjs' | 'python-fastapi'>('python-fastapi');
+  const [workMode, setWorkMode] = useState<'code' | 'work'>('code');
+  const [work_directory, setWork_directory] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
   const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [homeTab, setHomeTab] = useState<'templates' | 'deployed' | 'developed'>('templates');
+  const [workHomeTab, setWorkHomeTab] = useState<'tips' | 'recent'>('tips');
+  const [inputControl, setInputControl] = useState<{ focus: () => void; setMessage: (msg: string) => void } | null>(null);
   const { settings: globalSettings } = useGlobalSettings();
 
   // Build model options
@@ -137,9 +141,38 @@ function WorkspaceContent() {
     }
   }, [globalSettings]);
 
+  // Handle tip card click - fill input and open directory selector
+  const handleTipCardClick = useCallback(async (title: string) => {
+    // Fill the input with the tip title
+    if (inputControl) {
+      inputControl.setMessage(title);
+    }
+
+    // Open directory selector
+    if (typeof window !== 'undefined' && (window as any).desktopAPI?.selectDirectory) {
+      try {
+        const result = await (window as any).desktopAPI.selectDirectory();
+        if (result?.success && result?.path) {
+          setWork_directory(result.path);
+        }
+      } catch (error) {
+        console.error('Error selecting directory:', error);
+      }
+    } else {
+      alert('请使用桌面客户端选择目录');
+    }
+  }, [inputControl]);
+
   // Create project and navigate
   const handleCreateProject = async (message: string, images?: any[]): Promise<boolean> => {
     if (isCreating) return false;
+
+    // work 模式需要选择目录
+    if (workMode === 'work' && !work_directory) {
+      alert('请先选择工作目录');
+      return false;
+    }
+
     setIsCreating(true);
 
     try {
@@ -159,6 +192,8 @@ function WorkspaceContent() {
           preferredCli,
           selectedModel,
           projectType,
+          mode: workMode,
+          work_directory: workMode === 'work' ? work_directory : undefined,
         })
       });
 
@@ -331,12 +366,14 @@ function WorkspaceContent() {
               </button>
             </div>
 
-            <div className="w-full max-w-2xl px-8 mt-24">
+            <div className="w-full max-w-4xl px-8 mt-24">
               <h1 className="text-4xl font-bold text-gray-900 mb-1.5 text-center">
                 Goodable
               </h1>
               <p className="text-gray-600 mb-6 text-center">
-                开箱即用，内置1000+应用模板，专门为普通用户设计的软件生成器！
+                {workMode === 'work'
+                  ? '本地电脑助手，帮你整理文件夹、提取报销单、解析合同、筛选简历等自动化任务！'
+                  : '开箱即用，内置1000+应用模板，专门为普通用户设计的软件生成器！'}
               </p>
               <ChatInput
                 onSendMessage={handleCreateProject}
@@ -344,6 +381,10 @@ function WorkspaceContent() {
                 placeholder="描述你想要的应用..."
                 defaultValue="做一个coze工作流一键变网站的工具"
                 mode="act"
+                workMode={workMode}
+                onWorkModeChange={setWorkMode}
+                work_directory={work_directory}
+                onWork_directoryChange={setWork_directory}
                 preferredCli={preferredCli}
                 selectedModel={selectedModel}
                 thinkingMode={thinkingMode}
@@ -354,245 +395,369 @@ function WorkspaceContent() {
                 onCliChange={handleCliChange}
                 projectType={projectType}
                 onProjectTypeChange={setProjectType}
+                onExposeInputControl={setInputControl}
               />
 
-              {/* Quick Action Chips */}
-              <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-                <button
-                  onClick={() => handleCreateProject("做一个万能短视频下载工具")}
-                  className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
-                >
-                  做一个万能短视频下载工具
-                </button>
-                <button
-                  onClick={() => handleCreateProject("做一个飞书文档一键变网站的工具")}
-                  className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
-                >
-                  做一个飞书文档一键变网站的工具
-                </button>
-                <button
-                  onClick={() => handleCreateProject("做一个微信群智能助手")}
-                  className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
-                >
-                  做一个微信群智能助手
-                </button>
-              </div>
+              {/* Quick Action Chips - only show in code mode */}
+              {workMode === 'code' && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleCreateProject("做一个万能短视频下载工具")}
+                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                  >
+                    做一个万能短视频下载工具
+                  </button>
+                  <button
+                    onClick={() => handleCreateProject("做一个飞书文档一键变网站的工具")}
+                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                  >
+                    做一个飞书文档一键变网站的工具
+                  </button>
+                  <button
+                    onClick={() => handleCreateProject("做一个微信群智能助手")}
+                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                  >
+                    做一个微信群智能助手
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Tab Switcher */}
-            <div className="w-full max-w-5xl px-8 mt-12 flex items-center justify-start gap-6 border-b border-gray-200">
-              {[
-                { key: 'templates' as const, label: '模板市场', showCount: false },
-                { key: 'deployed' as const, label: '已部署到阿里云', showCount: true, count: projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null).length },
-                { key: 'developed' as const, label: '开发完成', showCount: true, count: projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl).length },
-              ].map(({ key, label, showCount, count }) => {
-                const isActive = homeTab === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setHomeTab(key)}
-                    className={`px-1 pb-3 text-sm border-b-2 transition-colors ${
-                      isActive
-                        ? 'border-gray-900 text-gray-900 font-medium'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {label}{showCount && ` (${count})`}
-                  </button>
-                );
-              })}
-            </div>
+            {/* Tab Switcher - Different for code vs work mode */}
+            {workMode === 'code' ? (
+              <div className="w-full max-w-5xl px-8 mt-12 flex items-center justify-start gap-6 border-b border-gray-200">
+                {[
+                  { key: 'templates' as const, label: '模板市场', showCount: false },
+                  { key: 'deployed' as const, label: '已部署到阿里云', showCount: true, count: projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').length },
+                  { key: 'developed' as const, label: '开发完成', showCount: true, count: projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl && p.mode !== 'work').length },
+                ].map(({ key, label, showCount, count }) => {
+                  const isActive = homeTab === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setHomeTab(key)}
+                      className={`px-1 pb-3 text-sm border-b-2 transition-colors ${
+                        isActive
+                          ? 'border-gray-900 text-gray-900 font-medium'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {label}{showCount && ` (${count})`}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="w-full max-w-5xl px-8 mt-12 flex items-center justify-start gap-6 border-b border-gray-200">
+                {[
+                  { key: 'tips' as const, label: '使用提醒' },
+                  { key: 'recent' as const, label: '最近操作', count: projects.filter((p: any) => p.mode === 'work').length },
+                ].map(({ key, label, count }) => {
+                  const isActive = workHomeTab === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setWorkHomeTab(key)}
+                      className={`px-1 pb-3 text-sm border-b-2 transition-colors ${
+                        isActive
+                          ? 'border-gray-900 text-gray-900 font-medium'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {label}{count !== undefined && ` (${count})`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Card Display Area */}
             <div className="w-full max-w-5xl px-8 mt-4 pb-8">
-              {/* Templates Tab */}
-              {homeTab === 'templates' && (
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
-                  {templates.filter(t => t.isDownloaded !== false).slice(0, 4).length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无模板</div>
-                  ) : (
-                    templates.filter(t => t.isDownloaded !== false).slice(0, 4).map((template) => {
-                      const isDownloaded = template.isDownloaded !== false;
-                      return (
+              {/* Code Mode Content */}
+              {workMode === 'code' && (
+                <>
+                  {/* Templates Tab */}
+                  {homeTab === 'templates' && (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                      {templates.filter(t => t.isDownloaded !== false).slice(0, 4).length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无模板</div>
+                      ) : (
+                        templates.filter(t => t.isDownloaded !== false).slice(0, 4).map((template) => {
+                          const isDownloaded = template.isDownloaded !== false;
+                          return (
+                            <div
+                              key={template.id}
+                              className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 group"
+                            >
+                              <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                {isDownloaded ? (
+                                  <CheckCircle className="w-8 h-8 text-green-500" />
+                                ) : (
+                                  <ShoppingBag className="w-8 h-8 text-gray-500" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
+                                  {template.name}
+                                </h3>
+                                <p className="text-xs text-gray-500 mb-2">
+                                  作者：{template.author || '古德白'}
+                                  {template.version && ` v${template.version}`} · {isDownloaded ? '本地' : '在线'}
+                                </p>
+                                {template.description && (
+                                  <p className="text-sm text-gray-600 line-clamp-2">
+                                    {template.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => handleUseTemplate(template.id, template.name)}
+                                  disabled={creatingTemplateId !== null}
+                                  className="px-4 py-2 bg-black hover:bg-gray-900 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  {creatingTemplateId === template.id ? '创建中...' : '使用'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Deployed Apps Tab */}
+                  {homeTab === 'deployed' && (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                      {projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').slice(0, 4).length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无已部署应用</div>
+                      ) : (
+                        projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').slice(0, 4).map((project: any) => {
+                          const projectType = project.projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js';
+                          const updateTime = new Date(project.updated_at || project.updatedAt || project.created_at || project.createdAt);
+                          const updateDate = updateTime.toLocaleDateString();
+                          const updateTimeStr = updateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                          const previewStatus = project.status;
+                          let previewStatusText = '';
+                          if (previewStatus === 'running') {
+                            previewStatusText = '运行中';
+                          }
+
+                          return (
+                            <div
+                              key={project.id}
+                              className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer group relative"
+                              onClick={() => router.push(`/${project.id}/chat`)}
+                            >
+                              <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                <Folder className="w-8 h-8 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
+                                  {project.name}
+                                </h3>
+                                {project.description && (
+                                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                    {project.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                                    {projectType}
+                                  </span>
+                                  <span>·</span>
+                                  <span>更新于 {updateDate} {updateTimeStr}</span>
+                                  <span>·</span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
+                                    已部署
+                                  </span>
+                                  {previewStatusText && (
+                                    <>
+                                      <span>·</span>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
+                                        {previewStatusText}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => handleDeleteProject(project.id, project.name, e)}
+                                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Developed Apps Tab */}
+                  {homeTab === 'developed' && (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                      {projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl && p.mode !== 'work').slice(0, 4).length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无开发完成的应用</div>
+                      ) : (
+                        projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl && p.mode !== 'work').slice(0, 4).map((project: any) => {
+                          const projectType = project.projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js';
+                          const updateTime = new Date(project.updated_at || project.updatedAt || project.created_at || project.createdAt);
+                          const updateDate = updateTime.toLocaleDateString();
+                          const updateTimeStr = updateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                          const previewStatus = project.status;
+                          let previewStatusText = '';
+                          if (previewStatus === 'running') {
+                            previewStatusText = '运行中';
+                          }
+
+                          return (
+                            <div
+                              key={project.id}
+                              className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer group relative"
+                              onClick={() => router.push(`/${project.id}/chat`)}
+                            >
+                              <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                <Folder className="w-8 h-8 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
+                                  {project.name}
+                                </h3>
+                                {project.description && (
+                                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                    {project.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+                                    {projectType}
+                                  </span>
+                                  <span>·</span>
+                                  <span>更新于 {updateDate} {updateTimeStr}</span>
+                                  <span>·</span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-purple-100 text-purple-700">
+                                    已安装
+                                  </span>
+                                  {previewStatusText && (
+                                    <>
+                                      <span>·</span>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
+                                        {previewStatusText}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => handleDeleteProject(project.id, project.name, e)}
+                                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Work Mode Content */}
+              {workMode === 'work' && (
+                <>
+                  {/* Tips Tab - 使用提醒 */}
+                  {workHomeTab === 'tips' && (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                      {[
+                        {
+                          icon: <FolderOpen className="w-8 h-8 text-green-500" />,
+                          title: '整理下载/桌面文件夹',
+                          description: '选中文件夹，AI 帮你按类型、日期自动分类，批量移动重命名'
+                        },
+                        {
+                          icon: <Receipt className="w-8 h-8 text-green-500" />,
+                          title: '智能整理发票生成报销单',
+                          description: '选中发票截图文件夹，AI 自动识别金额和类型，按项目分类汇总成表'
+                        },
+                        {
+                          icon: <FileText className="w-8 h-8 text-green-500" />,
+                          title: '智能整理合同文件夹',
+                          description: '选中合同文件夹，AI 智能提取客户、金额、类型等信息，生成统计表并归档'
+                        },
+                        {
+                          icon: <Users className="w-8 h-8 text-green-500" />,
+                          title: '智能简历批量整理',
+                          description: '选中简历文件夹，AI 提取关键信息生成汇总表，按人才级别、岗位类型等自动分类存档'
+                        }
+                      ].map((tip, index) => (
                         <div
-                          key={template.id}
-                          className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 group"
+                          key={index}
+                          onClick={() => handleTipCardClick(tip.title)}
+                          className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer"
                         >
-                          <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
-                            {isDownloaded ? (
-                              <CheckCircle className="w-8 h-8 text-green-500" />
-                            ) : (
-                              <ShoppingBag className="w-8 h-8 text-gray-500" />
-                            )}
+                          <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-green-50 flex-shrink-0">
+                            {tip.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
-                              {template.name}
+                            <h3 className="font-semibold text-gray-900 text-base mb-1">
+                              {tip.title}
                             </h3>
-                            <p className="text-xs text-gray-500 mb-2">
-                              作者：{template.author || '古德白'}
-                              {template.version && ` v${template.version}`} · {isDownloaded ? '本地' : '在线'}
+                            <p className="text-sm text-gray-600">
+                              {tip.description}
                             </p>
-                            {template.description && (
-                              <p className="text-sm text-gray-600 line-clamp-2">
-                                {template.description}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleUseTemplate(template.id, template.name)}
-                              disabled={creatingTemplateId !== null}
-                              className="px-4 py-2 bg-black hover:bg-gray-900 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-                            >
-                              {creatingTemplateId === template.id ? '创建中...' : '使用'}
-                            </button>
                           </div>
                         </div>
-                      );
-                    })
+                      ))}
+                    </div>
                   )}
-                </div>
-              )}
 
-              {/* Deployed Apps Tab */}
-              {homeTab === 'deployed' && (
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
-                  {projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null).slice(0, 4).length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无已部署应用</div>
-                  ) : (
-                    projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null).slice(0, 4).map((project: any) => {
-                      const projectType = project.projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js';
-                      const updateTime = new Date(project.updated_at || project.updatedAt || project.created_at || project.createdAt);
-                      const updateDate = updateTime.toLocaleDateString();
-                      const updateTimeStr = updateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-                      const previewStatus = project.status;
-                      let previewStatusText = '';
-                      if (previewStatus === 'running') {
-                        previewStatusText = '运行中';
-                      }
+                  {/* Recent Tab - 最近操作 */}
+                  {workHomeTab === 'recent' && (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                      {projects.filter((p: any) => p.mode === 'work').slice(0, 4).length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无操作记录</div>
+                      ) : (
+                        projects.filter((p: any) => p.mode === 'work').slice(0, 4).map((project: any) => {
+                          const updateTime = new Date(project.updated_at || project.updatedAt || project.created_at || project.createdAt);
+                          const updateDate = updateTime.toLocaleDateString();
+                          const updateTimeStr = updateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                          const dirName = project.work_directory ? project.work_directory.split(/[/\\]/).pop() : '';
 
-                      return (
-                        <div
-                          key={project.id}
-                          className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer group relative"
-                          onClick={() => router.push(`/${project.id}/chat`)}
-                        >
-                          <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
-                            <Folder className="w-8 h-8 text-gray-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
-                              {project.name}
-                            </h3>
-                            {project.description && (
-                              <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                                {project.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                                {projectType}
-                              </span>
-                              <span>·</span>
-                              <span>更新于 {updateDate} {updateTimeStr}</span>
-                              <span>·</span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
-                                已部署
-                              </span>
-                              {previewStatusText && (
-                                <>
-                                  <span>·</span>
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
-                                    {previewStatusText}
-                                  </span>
-                                </>
-                              )}
+                          return (
+                            <div
+                              key={project.id}
+                              className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer"
+                              onClick={() => router.push(`/${project.id}/chat`)}
+                            >
+                              <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
+                                <FolderOpen className="w-8 h-8 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
+                                  {project.name}
+                                </h3>
+                                {dirName && (
+                                  <p className="text-sm text-gray-600 mb-2 truncate" title={project.work_directory}>
+                                    {dirName}
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400">
+                                  {updateDate} {updateTimeStr}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => handleDeleteProject(project.id, project.name, e)}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
+                          );
+                        })
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-
-              {/* Developed Apps Tab */}
-              {homeTab === 'developed' && (
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
-                  {projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl).slice(0, 4).length === 0 ? (
-                    <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无开发完成的应用</div>
-                  ) : (
-                    projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl).slice(0, 4).map((project: any) => {
-                      const projectType = project.projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js';
-                      const updateTime = new Date(project.updated_at || project.updatedAt || project.created_at || project.createdAt);
-                      const updateDate = updateTime.toLocaleDateString();
-                      const updateTimeStr = updateTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-                      const previewStatus = project.status;
-                      let previewStatusText = '';
-                      if (previewStatus === 'running') {
-                        previewStatusText = '运行中';
-                      }
-
-                      return (
-                        <div
-                          key={project.id}
-                          className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 cursor-pointer group relative"
-                          onClick={() => router.push(`/${project.id}/chat`)}
-                        >
-                          <div className="w-16 h-16 rounded-xl flex items-center justify-center bg-gray-100 flex-shrink-0">
-                            <Folder className="w-8 h-8 text-gray-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-gray-900 text-base mb-1 truncate">
-                              {project.name}
-                            </h3>
-                            {project.description && (
-                              <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                                {project.description}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
-                                {projectType}
-                              </span>
-                              <span>·</span>
-                              <span>更新于 {updateDate} {updateTimeStr}</span>
-                              <span>·</span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-purple-100 text-purple-700">
-                                已安装
-                              </span>
-                              {previewStatusText && (
-                                <>
-                                  <span>·</span>
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded font-medium bg-green-100 text-green-700">
-                                    {previewStatusText}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => handleDeleteProject(project.id, project.name, e)}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -705,7 +870,7 @@ function WorkspaceContent() {
           <div className="flex-1 overflow-y-auto p-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">我的应用</h2>
-              {projects.length > 0 && (
+              {projects.filter((p: any) => p.mode !== 'work').length > 0 && (
                 <div className="flex items-center gap-2">
                   {[
                     { key: null, label: '全部' },
@@ -716,8 +881,9 @@ function WorkspaceContent() {
                     { key: '新建', label: '新建' },
                   ].map(({ key, label }) => {
                     const count = key === null
-                      ? projects.length
+                      ? projects.filter((p: any) => p.mode !== 'work').length
                       : projects.filter((p: any) => {
+                          if (p.mode === 'work') return false;
                           const status = p.deployedUrl ? '已部署'
                             : p.dependenciesInstalled ? '已安装'
                             : p.latestRequestStatus === 'completed' ? '已生成'
@@ -743,7 +909,7 @@ function WorkspaceContent() {
                 </div>
               )}
             </div>
-            {projects.length === 0 ? (
+            {projects.filter((p: any) => p.mode !== 'work').length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-500">还没有项目</p>
               </div>
@@ -751,6 +917,8 @@ function WorkspaceContent() {
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
                 {projects
                   .filter((project: any) => {
+                    // 排除 work 模式项目
+                    if (project.mode === 'work') return false;
                     if (filterStatus === null) return true;
                     const status = project.deployedUrl ? '已部署'
                       : project.dependenciesInstalled ? '已安装'

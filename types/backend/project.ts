@@ -20,6 +20,8 @@ export interface Project {
   initialPrompt?: string;
   templateType?: TemplateType;
   projectType?: string; // 'nextjs' | 'python-fastapi'
+  mode?: 'code' | 'work'; // 项目模式
+  work_directory?: string | null; // work 模式的工作目录
   activeClaudeSessionId?: string;
   activeCursorSessionId?: string;
   preferredCli?: string;
@@ -43,6 +45,8 @@ export interface CreateProjectInput {
   selectedModel?: string;
   description?: string;
   projectType?: string;
+  mode?: 'code' | 'work';
+  work_directory?: string;
 }
 
 export interface UpdateProjectInput {

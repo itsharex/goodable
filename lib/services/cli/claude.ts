@@ -812,31 +812,12 @@ export async function executeClaude(
 
     console.log(`[ClaudeService] ✅ Project verified: ${project.name}`);
 
-    // Validate and prepare project path
-    console.log(`[ClaudeService] 🔒 Validating project path...`);
-
-    // Convert to absolute path
+    // Prepare project path
     const absoluteProjectPath = path.isAbsolute(projectPath)
       ? path.resolve(projectPath)
       : path.resolve(process.cwd(), projectPath);
 
-    // Security: Verify project path is within allowed directory
-    const allowedBasePath = PROJECTS_DIR_ABSOLUTE;
-    const relativeToBase = path.relative(allowedBasePath, absoluteProjectPath);
-    const isWithinBase =
-      !relativeToBase.startsWith('..') && !path.isAbsolute(relativeToBase);
-    if (!isWithinBase) {
-      const errorMessage = `Security violation: Project path must be within ${allowedBasePath}. Got: ${absoluteProjectPath}`;
-      console.error(`[ClaudeService] ❌ ${errorMessage}`);
-
-      streamManager.publish(projectId, {
-        type: 'error',
-        error: errorMessage,
-        data: requestId ? { requestId } : undefined,
-      });
-
-      throw new Error(errorMessage);
-    }
+    console.log(`[ClaudeService] 📁 Project path: ${absoluteProjectPath}`);
 
     // Check project directory exists and create if needed
     try {
@@ -867,23 +848,57 @@ export async function executeClaude(
     const permissionMode = 'bypassPermissions';
     console.log(`[ClaudeService] 🔐 Permission Mode: ${permissionMode}`);
 
-    // 获取项目类型（必须存在）
+    // 获取项目类型和模式
     const projectType = (project as any).projectType as string | undefined;
+    const projectMode = (project as any).mode as string | undefined;
 
-    if (!projectType) {
+    // 关键调试日志：模式检测
+    console.log(`[ClaudeService] 🔍 Mode Detection (Execution):`);
+    console.log(`  - projectId: ${projectId}`);
+    console.log(`  - projectMode: ${projectMode}`);
+    console.log(`  - projectType: ${projectType}`);
+    console.log(`  - absoluteProjectPath: ${absoluteProjectPath}`);
+
+    // 写入 Timeline 日志
+    try {
+      await timelineLogger.logSDK(projectId, `Mode Detection | mode: ${projectMode} | type: ${projectType}`, 'info', requestId, { mode: projectMode, projectType, path: absoluteProjectPath }, 'sdk.mode_detection');
+    } catch {}
+
+    // work 模式不需要检查 projectType
+    if (projectMode !== 'work' && !projectType) {
       throw new Error('项目类型未定义：projectType 字段缺失');
     }
 
-    if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {
-      throw new Error(`不支持的项目类型: ${projectType}`);
+    // work 模式使用专用提示词
+    let systemPromptText: string;
+    if (projectMode === 'work') {
+      console.log(`[ClaudeService] ✅ Using WORK mode prompt`);
+      console.log(`[ClaudeService] 📁 Work Directory: ${absoluteProjectPath}`);
+
+      const { getPrompt } = await import('@/lib/config/prompts');
+      const workPrompt = await getPrompt('work-mode');
+
+      // 添加工作目录信息到提示词
+      systemPromptText = `${workPrompt}
+
+## 当前工作目录
+
+你正在操作的工作目录是：\`${absoluteProjectPath}\`
+
+用户已经选择了这个目录作为工作目录，你可以直接在这个目录下进行文件操作，不需要再询问用户目录路径。`;
+    } else {
+      // code 模式使用项目类型对应的提示词
+      if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {
+        throw new Error(`不支持的项目类型: ${projectType}`);
+      }
+
+      console.log(`[ClaudeService] 📋 Project Type: ${projectType}`);
+      console.log(`[ClaudeService] 🎯 Using ${projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js'} System Prompt`);
+
+      // 从配置模块加载提示词（支持热更新）
+      const { getExecutionSystemPrompt } = await import('@/lib/config/prompts');
+      systemPromptText = await getExecutionSystemPrompt(projectType, absoluteProjectPath);
     }
-
-    console.log(`[ClaudeService] 📋 Project Type: ${projectType}`);
-    console.log(`[ClaudeService] 🎯 Using ${projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js'} System Prompt`);
-
-    // 从配置模块加载提示词（支持热更新）
-    const { getExecutionSystemPrompt } = await import('@/lib/config/prompts');
-    const systemPromptText = await getExecutionSystemPrompt(projectType, absoluteProjectPath);
 
     try {
       const promptPreview = instruction.substring(0, 500) + (instruction.length > 500 ? '...' : '');
@@ -1941,24 +1956,58 @@ export async function generatePlan(
       await fs.mkdir(projectPath, { recursive: true });
     }
 
-    // 获取项目信息并根据类型选择规划Prompt
+    // 获取项目信息并根据类型/模式选择规划Prompt
     const project = await getProjectById(projectId);
     const projectType = (project as any)?.projectType as string | undefined;
+    const projectMode = (project as any)?.mode as string | undefined;
 
-    if (!projectType) {
+    // 关键调试日志：模式检测
+    console.log(`[ClaudeService] 🔍 Mode Detection (Planning):`);
+    console.log(`  - projectId: ${projectId}`);
+    console.log(`  - projectMode: ${projectMode}`);
+    console.log(`  - projectType: ${projectType}`);
+    console.log(`  - projectPath: ${projectPath}`);
+
+    // 写入 Timeline 日志
+    try {
+      await timelineLogger.logSDK(projectId, `Mode Detection (Planning) | mode: ${projectMode} | type: ${projectType}`, 'info', requestId, { mode: projectMode, projectType, path: projectPath }, 'sdk.mode_detection.planning');
+    } catch {}
+
+    // work 模式不需要检查 projectType
+    if (projectMode !== 'work' && !projectType) {
       throw new Error('项目类型未定义：projectType 字段缺失');
     }
 
-    if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {
-      throw new Error(`不支持的项目类型: ${projectType}`);
+    // work 模式使用专用提示词
+    let systemPromptText: string;
+    if (projectMode === 'work') {
+      console.log(`[ClaudeService] ✅ Using WORK mode prompt`);
+      console.log(`[ClaudeService] 📁 Work Directory: ${projectPath}`);
+
+      const { getPrompt } = await import('@/lib/config/prompts');
+      const workPrompt = await getPrompt('work-mode');
+
+      // work 模式没有规划阶段，直接告诉 AI 工作目录
+      systemPromptText = `${workPrompt}
+
+## 当前工作目录
+
+你正在操作的工作目录是：\`${projectPath}\`
+
+用户已经选择了这个目录作为工作目录，你可以直接在这个目录下进行文件操作，不需要再询问用户目录路径。`;
+    } else {
+      // code 模式使用项目类型对应的规划提示词
+      if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {
+        throw new Error(`不支持的项目类型: ${projectType}`);
+      }
+
+      console.log(`[ClaudeService] 📋 Project Type (Planning): ${projectType}`);
+      console.log(`[ClaudeService] 🎯 Using ${projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js'} Planning Prompt`);
+
+      // 从配置模块加载规划提示词（支持热更新）
+      const { getPlanningSystemPrompt } = await import('@/lib/config/prompts');
+      systemPromptText = await getPlanningSystemPrompt(projectType);
     }
-
-    // 从配置模块加载规划提示词（支持热更新）
-    const { getPlanningSystemPrompt } = await import('@/lib/config/prompts');
-    const systemPromptText = await getPlanningSystemPrompt(projectType);
-
-    console.log(`[ClaudeService] 📋 Project Type (Planning): ${projectType}`);
-    console.log(`[ClaudeService] 🎯 Using ${projectType === 'python-fastapi' ? 'Python FastAPI' : 'Next.js'} Planning Prompt`);
 
     // 注意：不要修改 process.env.DATABASE_URL！
     // 平台数据库应始终连接到 prod.db

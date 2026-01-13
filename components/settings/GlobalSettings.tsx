@@ -1117,7 +1117,7 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
 
                 {/* Prompt Tabs */}
                 <div className="flex gap-2 border-b border-gray-200 pb-2">
-                  {['nextjs-execution', 'nextjs-planning', 'python-execution', 'python-planning'].map(key => (
+                  {['nextjs-execution', 'nextjs-planning', 'python-execution', 'python-planning', 'work-mode'].map(key => (
                     <button
                       key={key}
                       onClick={() => setActivePromptKey(key)}

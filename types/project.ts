@@ -40,8 +40,10 @@ export interface Project {
   fallbackEnabled?: boolean;
   planConfirmed?: boolean;
   dependenciesInstalled?: boolean;
-  projectType?: string; // nextjs | python-fastapi
+  projectType?: string; // nextjs | python-fastapi | default
   absolutePath?: string; // 项目在服务器上的绝对路径
+  mode?: 'code' | 'work'; // 项目模式
+  work_directory?: string | null; // work 模式的工作目录
   latestRequestStatus?: string | null; // 最新 userRequest 的状态
   deployedUrl?: string | null; // 阿里云 FC 部署地址
 }

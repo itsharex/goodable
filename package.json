@@ -1,6 +1,6 @@
 {
   "name": "goodable",
-  "version": "0.6.7",
+  "version": "0.7.0",
   "description": "AI-Powered Web App Builder - Build apps with natural language using Claude Code, Cursor, and more",
   "private": true,
   "main": "electron/main.js",
@@ -30,9 +30,11 @@
     "highlight.js": "^11.10.0",
     "lucide-react": "^0.460.0",
     "next": "^15.5.6",
+    "pdfjs-dist": "^5.4.530",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "react-markdown": "^10.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tree-kill": "^1.2.2",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
@@ -175,7 +177,9 @@
         {
           "from": "node-runtime/darwin-${arch}",
           "to": "node-runtime/darwin-${arch}",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },
@@ -193,12 +197,16 @@
         {
           "from": "node-runtime/win32-x64",
           "to": "node-runtime/win32-x64",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         },
         {
           "from": "git-runtime/win32-x64",
           "to": "git-runtime/win32-x64",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },

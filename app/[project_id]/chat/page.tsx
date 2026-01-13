@@ -9,7 +9,7 @@ import {
   File as FileIcon, FileCode, Palette, Braces, Atom, Workflow, Ship, GitBranch, FileText,
   Database, Coffee, Triangle, Lock, Home, ChevronUp, ChevronRight, ChevronDown,
   ArrowLeft, ArrowRight, RotateCcw, Share2, Type, Bird, Gem, Flame, List, Plus,
-  HelpCircle, ExternalLink
+  HelpCircle, ExternalLink, Grid
 } from 'lucide-react';
 import ChatLog from '@/components/chat/ChatLog';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
@@ -20,6 +20,7 @@ import AppSidebar from '@/components/layout/AppSidebar';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import AliyunDeployPage from '@/components/deploy/AliyunDeployPage';
 import PreviewTabs from '@/components/preview/PreviewTabs';
+import FileGridView from '@/components/files/FileGridView';
 import { getDefaultModelForCli, getModelDisplayName } from '@/lib/constants/cliModels';
 import {
   ACTIVE_CLI_BRAND_COLORS,
@@ -80,6 +81,40 @@ const buildModelOptions = (statuses: Record<string, CliStatusSnapshot>): ModelOp
     ...option,
     cli: option.cli,
   }));
+
+// Truncate filename: max 25 chars for English, 12 chars for Chinese
+const truncateFileName = (name: string): string => {
+  if (!name) return '';
+
+  const chineseCharCount = (name.match(/[\u4e00-\u9fa5]/g) || []).length;
+  const otherCharCount = name.length - chineseCharCount;
+
+  // Weight: Chinese char = 2, other char = 1
+  const totalWeight = chineseCharCount * 2 + otherCharCount;
+  const maxWeight = 25; // ~12 Chinese chars or 25 English chars
+
+  if (totalWeight <= maxWeight) {
+    return name;
+  }
+
+  // Truncate and add ellipsis
+  let truncated = '';
+  let currentWeight = 0;
+
+  for (const char of name) {
+    const isChinese = /[\u4e00-\u9fa5]/.test(char);
+    const charWeight = isChinese ? 2 : 1;
+
+    if (currentWeight + charWeight > maxWeight - 3) { // Reserve space for "..."
+      break;
+    }
+
+    truncated += char;
+    currentWeight += charWeight;
+  }
+
+  return truncated + '...';
+};
 
 // TreeView component for VSCode-style file explorer
 interface TreeViewProps {
@@ -171,8 +206,8 @@ function TreeView({ entries, selectedFile, expandedFolders, folderContents, onTo
               {/* File/Folder name */}
               <span className={`text-[13px] leading-[22px] ${
                 selectedFile === fullPath ? 'text-blue-700 ' : 'text-gray-700 '
-              }`} style={{ fontFamily: "'Segoe UI', Tahoma, sans-serif" }}>
-                {level === 0 ? (entry.path.split('/').pop() || entry.path) : (entry.path.split('/').pop() || entry.path)}
+              }`} style={{ fontFamily: "'Segoe UI', Tahoma, sans-serif" }} title={entry.path.split('/').pop() || entry.path}>
+                {truncateFileName(entry.path.split('/').pop() || entry.path)}
               </span>
             </div>
             
@@ -229,6 +264,7 @@ export default function ChatPage() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['']));
   const [folderContents, setFolderContents] = useState<Map<string, Entry[]>>(new Map());
   const [prompt, setPrompt] = useState('');
+  const [fileViewMode, setFileViewMode] = useState<'list' | 'grid'>('list');
 
   // Ref to store add/remove message handlers from ChatLog
   const messageHandlersRef = useRef<{
@@ -268,6 +304,7 @@ export default function ChatPage() {
   const [hasInitialPrompt, setHasInitialPrompt] = useState<boolean>(false);
   const [agentWorkComplete, setAgentWorkComplete] = useState<boolean>(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>('initializing');
+  const [projectMode, setProjectMode] = useState<'code' | 'work'>('code'); // 项目模式
   const [initializationMessage, setInitializationMessage] = useState('Starting project initialization...');
   const [initialPromptSent, setInitialPromptSent] = useState(false);
   const initialPromptSentRef = useRef(false);
@@ -1601,6 +1638,7 @@ const persistProjectPreferences = useCallback(
       const followGlobal = !rawPreferredCli && !rawSelectedModel;
       setUsingGlobalDefaults(followGlobal);
       setProjectDescription(project.description || '');
+      setProjectMode(project.mode || 'code'); // 设置项目模式
 
       if (project.initial_prompt) {
         setHasInitialPrompt(true);
@@ -2842,7 +2880,7 @@ const persistProjectPreferences = useCallback(
                       title="Code"
                     >
                       <span className="w-4 h-4 flex items-center justify-center"><Code size={16} /></span>
-                      {!showPreview && !showConsole && !showSettings && !showAliyunDeploy && <span className="ml-1">代码</span>}
+                      {!showPreview && !showConsole && !showSettings && !showAliyunDeploy && <span className="ml-1">文件</span>}
                     </button>
                     <button
                       className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
@@ -2884,23 +2922,26 @@ const persistProjectPreferences = useCallback(
                       <span className="w-4 h-4 flex items-center justify-center"><Settings size={16} /></span>
                       {showSettings && <span className="ml-1">设置</span>}
                     </button>
-                    <button
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
-                        showAliyunDeploy
-                          ? 'bg-white text-gray-900 '
-                          : 'text-gray-600 hover:text-gray-900 '
-                      }`}
-                      onClick={() => {
-                        setShowAliyunDeploy(true);
-                        setShowPreview(false);
-                        setShowConsole(false);
-                        setShowSettings(false);
-                      }}
-                      title="Deploy"
-                    >
-                      <span className="w-4 h-4 flex items-center justify-center"><Share2 size={16} /></span>
-                      {showAliyunDeploy && <span className="ml-1">发布</span>}
-                    </button>
+                    {/* 只在 code 模式下显示发布按钮 */}
+                    {projectMode === 'code' && (
+                      <button
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                          showAliyunDeploy
+                            ? 'bg-white text-gray-900 '
+                            : 'text-gray-600 hover:text-gray-900 '
+                        }`}
+                        onClick={() => {
+                          setShowAliyunDeploy(true);
+                          setShowPreview(false);
+                          setShowConsole(false);
+                          setShowSettings(false);
+                        }}
+                        title="Deploy"
+                      >
+                        <span className="w-4 h-4 flex items-center justify-center"><Share2 size={16} /></span>
+                        {showAliyunDeploy && <span className="ml-1">发布</span>}
+                      </button>
+                    )}
                   </div>
                   
                   {/* Center Controls */}
@@ -3492,19 +3533,28 @@ const persistProjectPreferences = useCallback(
                   <div className="flex items-center justify-between px-3 py-2 bg-gray-100 border-b border-gray-200">
                     <div className="flex items-center gap-2">
                       <Code className="text-gray-600" size={14} />
-                      <span className="text-sm font-medium text-gray-700">代码</span>
+                      <span className="text-sm font-medium text-gray-700">文件</span>
                     </div>
-                    <button
-                      onClick={() => {
-                        if (loadTreeRef.current) {
-                          loadTreeRef.current('.');
-                        }
-                      }}
-                      className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
-                      title="刷新文件树"
-                    >
-                      <RefreshCw size={12} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setFileViewMode(fileViewMode === 'list' ? 'grid' : 'list')}
+                        className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                        title={fileViewMode === 'list' ? '切换到网格视图' : '切换到列表视图'}
+                      >
+                        {fileViewMode === 'list' ? <Grid size={12} /> : <List size={12} />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (loadTreeRef.current) {
+                            loadTreeRef.current('.');
+                          }
+                        }}
+                        className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                        title="刷新文件树"
+                      >
+                        <RefreshCw size={12} />
+                      </button>
+                    </div>
                   </div>
                   {/* File Tree */}
                   <div className="flex-1 overflow-y-auto bg-gray-50 custom-scrollbar">
@@ -3512,8 +3562,19 @@ const persistProjectPreferences = useCallback(
                       <div className="px-3 py-8 text-center text-[11px] text-gray-600 select-none">
                         No files found
                       </div>
+                    ) : fileViewMode === 'grid' ? (
+                      <FileGridView
+                        files={tree.map(entry => ({
+                          name: entry.path.split('/').pop() || entry.path,
+                          path: entry.path,
+                          type: entry.type === 'dir' ? 'directory' : 'file',
+                          extension: entry.type === 'file' ? entry.path.split('.').pop() : undefined
+                        }))}
+                        onFileClick={(file) => openFile(file.path)}
+                        onFolderClick={(folder) => toggleFolder(folder.path)}
+                      />
                     ) : (
-                      <TreeView 
+                      <TreeView
                         entries={tree || []}
                         selectedFile={selectedFile}
                         expandedFolders={expandedFolders}

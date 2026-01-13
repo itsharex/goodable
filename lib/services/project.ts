@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { normalizeModelId, getDefaultModelForCli } from '@/lib/constants/cliModels';
 import { PROJECTS_DIR_ABSOLUTE } from '@/lib/config/paths';
+import { timelineLogger } from './timeline';
 
 /**
  * Retrieve all projects
@@ -101,9 +102,22 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * Create new project
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  // Create project directory
-  const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
-  await fs.mkdir(projectPath, { recursive: true });
+  const mode = input.mode || 'code';
+  let projectPath: string;
+
+  // work 模式: projectType 强制为 'default'，不使用传入值
+  const projectType = mode === 'work' ? 'default' : (input.projectType || 'nextjs');
+
+  if (mode === 'work') {
+    // work 模式使用用户指定的目录
+    projectPath = input.work_directory || '';
+    console.log(`[ProjectService] 📁 Work mode - work_directory: ${projectPath}`);
+  } else {
+    // code 模式创建项目目录
+    projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
+    await fs.mkdir(projectPath, { recursive: true });
+    console.log(`[ProjectService] 📁 Code mode - projectPath: ${projectPath}, projectType: ${projectType}`);
+  }
 
   const nowIso = new Date().toISOString();
 
@@ -119,7 +133,9 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       selectedModel: normalizeModelId(input.preferredCli || 'claude', input.selectedModel ?? getDefaultModelForCli(input.preferredCli || 'claude')),
       status: 'idle',
       templateType: 'nextjs',
-      projectType: input.projectType || 'nextjs',
+      projectType,
+      mode,
+      work_directory: input.work_directory ?? null,
       createdAt: nowIso,
       updatedAt: nowIso,
       lastActiveAt: nowIso,
@@ -128,7 +144,23 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     })
     .returning();
 
-  console.log(`[ProjectService] Created project: ${project.id}`);
+  console.log(`[ProjectService] ✅ Created project: ${project.id} | mode: ${mode} | projectType: ${projectType} | path: ${projectPath}`);
+
+  // 写入 Timeline 日志
+  try {
+    await timelineLogger.append({
+      type: 'system',
+      level: 'info',
+      message: `Project created | mode: ${mode} | projectType: ${projectType}`,
+      projectId: project.id,
+      component: 'project',
+      event: 'project.created',
+      metadata: { mode, projectType, work_directory: input.work_directory || null, repoPath: projectPath }
+    });
+  } catch (err) {
+    console.warn('[ProjectService] Failed to write timeline log:', err);
+  }
+
   return {
     ...project,
     selectedModel: normalizeModelId(project.preferredCli ?? 'claude', project.selectedModel ?? undefined),

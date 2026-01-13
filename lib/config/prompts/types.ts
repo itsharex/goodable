@@ -9,7 +9,8 @@ export type PromptKey =
   | 'nextjs-execution'      // Next.js 执行阶段
   | 'nextjs-planning'       // Next.js 规划阶段
   | 'python-execution'      // Python 执行阶段
-  | 'python-planning';      // Python 规划阶段
+  | 'python-planning'       // Python 规划阶段
+  | 'work-mode';            // Work 文件操作模式
 
 /**
  * 提示词配置
@@ -33,6 +34,7 @@ export interface PromptsConfig {
   'nextjs-planning': string;
   'python-execution': string;
   'python-planning': string;
+  'work-mode': string;
 }
 
 /**
@@ -54,5 +56,9 @@ export const PROMPT_METADATA: Record<PromptKey, { label: string; description: st
   'python-planning': {
     label: 'Python 规划提示词',
     description: '控制 AI 在规划 Python FastAPI 项目方案时的沟通方式',
+  },
+  'work-mode': {
+    label: 'Work 模式操作提示词',
+    description: '控制 AI 在 Work 模式下进行文件操作时的行为规范',
   },
 };

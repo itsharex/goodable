@@ -61,6 +61,7 @@ export async function getAllPrompts(): Promise<PromptsConfig> {
       'nextjs-planning': customPrompts?.['nextjs-planning']?.trim() || DEFAULT_PROMPTS['nextjs-planning'],
       'python-execution': customPrompts?.['python-execution']?.trim() || DEFAULT_PROMPTS['python-execution'],
       'python-planning': customPrompts?.['python-planning']?.trim() || DEFAULT_PROMPTS['python-planning'],
+      'work-mode': customPrompts?.['work-mode']?.trim() || DEFAULT_PROMPTS['work-mode'],
     };
   } catch (error) {
     console.error('[Prompts] Failed to load prompts, using defaults:', error);

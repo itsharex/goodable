@@ -25,17 +25,18 @@
 
 ---
 
-## 立即下载（推荐）
+## coWork 模式上线了（20260113）
 
-> 一键下载安装包即可使用，无需本地配置 Python / Node.js。
+**快速复刻了 Claude 官方 Cowork 模式的核心能力！**
 
-| macOS (Apple Silicon / ARM) | macOS (Intel / x86) | Windows |
-|---|---|---|
-| [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) |
+今天 claude发布了新的 cowork 工具，我下午快速复刻了一个 cowork 模式，基本的支持都有了，目前是纯提示词驱动的，要模拟 claude 官方的 cowork完整效果， 还需要加上 办公场景常用的skills 技能集合。欢迎有兴趣朋友们一起玩。想体验可下载安装包快速跑一下。
 
-**说明**：进入 Release 页面后，选择对应平台的安装包下载即可。
+**欢迎下载体验最新版本！**
+
+![Work 模式工作区](public/screenshot/cowork.png)
 
 ---
+
 
 ## Goodable 是什么？
 
@@ -43,9 +44,10 @@ Goodable 是一个“给普通人用的 AI 编程工具箱”。
 
 你可以把它理解为：**一套可持续迭代的模板市场 + 强力代码生成/改造能力 + 一键发布能力**，把“会用 AI”变成“能交付应用”。
 
-![Goodable 首页](public/screenshot/01.png)
+![Goodable 首页](public/screenshot/index.png)
 
 ---
+
 
 ## 定位与对比
 
@@ -111,9 +113,17 @@ Goodable 是一个“给普通人用的 AI 编程工具箱”。
 
 ### 普通用户：3 步上手
 
-1. 直接在本页顶部
-2. 下载对应平台安装包
-3. 安装后直接运行 → 导入模板 → 运行/发布
+1. 直接载对应平台安装包，安装后直接运行 → 导入模板 → 运行/发布
+
+> 一键下载安装包即可使用，无需本地配置 Python / Node.js。
+
+| macOS (Apple Silicon / ARM) | macOS (Intel / x86) | Windows |
+|---|---|---|
+| [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) | [⬇️ 下载](https://github.com/ImGoodBai/goodable/releases/latest) |
+
+**说明**：进入 Release 页面后，选择对应平台的安装包下载即可。
+
+---
 
 ### 开发者：二次开发与私有化
 

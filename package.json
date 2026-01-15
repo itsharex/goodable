@@ -111,7 +111,7 @@
       {
         "from": ".next/standalone",
         "to": "standalone",
-        "filter": ["**/*"]
+        "filter": ["**/*", "!public/**"]
       },
       {
         "from": ".next/static",

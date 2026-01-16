@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatInput from '@/components/chat/ChatInput';
-import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users } from 'lucide-react';
+import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users, Sparkles } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 import {
@@ -35,11 +35,20 @@ interface Template {
   isDownloaded?: boolean;
 }
 
+interface SkillMeta {
+  name: string;
+  description: string;
+  path: string;
+  source: 'builtin' | 'user';
+  size: number;
+  enabled: boolean;
+}
+
 function WorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const viewParam = searchParams?.get('view') as 'home' | 'templates' | 'apps' | 'help' | null;
-  const [currentView, setCurrentView] = useState<'home' | 'templates' | 'apps' | 'help'>(viewParam || 'home');
+  const viewParam = searchParams?.get('view') as 'home' | 'templates' | 'apps' | 'skills' | 'help' | null;
+  const [currentView, setCurrentView] = useState<'home' | 'templates' | 'apps' | 'skills' | 'help'>(viewParam || 'home');
   const [projects, setProjects] = useState<any[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [preferredCli, setPreferredCli] = useState<ActiveCliId>(DEFAULT_ACTIVE_CLI);
@@ -56,6 +65,13 @@ function WorkspaceContent() {
   const [workHomeTab, setWorkHomeTab] = useState<'tips' | 'recent'>('tips');
   const [inputControl, setInputControl] = useState<{ focus: () => void; setMessage: (msg: string) => void } | null>(null);
   const { settings: globalSettings } = useGlobalSettings();
+
+  // Skills state
+  const [skills, setSkills] = useState<SkillMeta[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsMessage, setSkillsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [importPath, setImportPath] = useState('');
+  const [importing, setImporting] = useState(false);
 
   // Build model options
   const modelOptions: ActiveModelOption[] = buildActiveModelOptions({});
@@ -107,6 +123,93 @@ function WorkspaceContent() {
     }
   }, []);
 
+  // Load skills
+  const loadSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/skills`);
+      if (response.ok) {
+        const data = await response.json();
+        setSkills(data.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load skills:', error);
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
+
+  // Toggle skill enabled state
+  const toggleSkillEnabled = async (skillName: string, enabled: boolean) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skillName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (response.ok) {
+        setSkills(prev => prev.map(s => s.name === skillName ? { ...s, enabled } : s));
+        setSkillsMessage({ type: 'success', text: enabled ? '已启用' : '已禁用' });
+      }
+    } catch (error) {
+      setSkillsMessage({ type: 'error', text: '操作失败' });
+    }
+    setTimeout(() => setSkillsMessage(null), 2000);
+  };
+
+  // Delete skill
+  const deleteSkill = async (skillName: string) => {
+    if (!confirm(`确定要删除技能 "${skillName}" 吗？`)) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skillName)}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setSkills(prev => prev.filter(s => s.name !== skillName));
+        setSkillsMessage({ type: 'success', text: '已删除' });
+      } else {
+        const data = await response.json();
+        setSkillsMessage({ type: 'error', text: data.error || '删除失败' });
+      }
+    } catch (error) {
+      setSkillsMessage({ type: 'error', text: '删除失败' });
+    }
+    setTimeout(() => setSkillsMessage(null), 2000);
+  };
+
+  // Import skill
+  const importSkill = async () => {
+    if (!importPath.trim()) return;
+    setImporting(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/skills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: importPath.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSkillsMessage({ type: 'success', text: '导入成功' });
+        setImportPath('');
+        await loadSkills();
+      } else {
+        setSkillsMessage({ type: 'error', text: data.error || '导入失败' });
+      }
+    } catch (error) {
+      setSkillsMessage({ type: 'error', text: '导入失败' });
+    } finally {
+      setImporting(false);
+    }
+    setTimeout(() => setSkillsMessage(null), 3000);
+  };
+
+  // Format file size
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   // Load workMode from localStorage on client side
   useEffect(() => {
     const saved = localStorage.getItem('workspace_work_mode');
@@ -137,8 +240,10 @@ function WorkspaceContent() {
       loadProjects();
     } else if (currentView === 'templates') {
       loadTemplates();
+    } else if (currentView === 'skills') {
+      loadSkills();
     }
-  }, [currentView, loadProjects, loadTemplates]);
+  }, [currentView, loadProjects, loadTemplates, loadSkills]);
 
   // Sync with global settings
   useEffect(() => {
@@ -1042,6 +1147,113 @@ function WorkspaceContent() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Skills View */}
+        {currentView === 'skills' && (
+          <div className="flex-1 overflow-y-auto p-8">
+            <div className="max-w-4xl mx-auto space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">我的技能</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    技能包让 AI 学会特定任务（如创建 PPT、处理文档等）
+                  </p>
+                </div>
+                {skillsMessage && (
+                  <span className={`text-sm ${skillsMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                    {skillsMessage.text}
+                  </span>
+                )}
+              </div>
+
+              {/* Import Section */}
+              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                <input
+                  type="text"
+                  value={importPath}
+                  onChange={(e) => setImportPath(e.target.value)}
+                  placeholder="输入技能文件夹或 ZIP 文件路径..."
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                />
+                <button
+                  onClick={importSkill}
+                  disabled={importing || !importPath.trim()}
+                  className="px-4 py-1.5 text-sm font-medium bg-gray-900 hover:bg-gray-800 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {importing ? '导入中...' : '导入技能'}
+                </button>
+              </div>
+
+              {/* Skills List */}
+              {skillsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-gray-500">加载中...</div>
+                </div>
+              ) : skills.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p>暂无技能</p>
+                  <p className="text-sm mt-1">导入技能包或将内置技能放入 skills 目录</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {skills.map((skill) => (
+                    <div
+                      key={skill.name}
+                      className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900 text-sm">{skill.name}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            skill.source === 'builtin'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {skill.source === 'builtin' ? '内置' : '用户导入'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{skill.description}</p>
+                        <p className="text-xs text-gray-400 mt-1">大小: {formatSize(skill.size)}</p>
+                      </div>
+                      <div className="flex items-center gap-3 ml-4">
+                        {/* Toggle Switch */}
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={skill.enabled}
+                            onChange={(e) => toggleSkillEnabled(skill.name, e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-900"></div>
+                        </label>
+                        {/* Delete Button (only for user skills) */}
+                        {skill.source === 'user' && (
+                          <button
+                            onClick={() => deleteSkill(skill.name)}
+                            className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg transition-colors"
+                          >
+                            删除
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Footer Stats */}
+              {skills.length > 0 && (
+                <div className="pt-4 border-t border-gray-200 text-sm text-gray-500">
+                  共 {skills.length} 个技能 | 已启用 {skills.filter(s => s.enabled).length} 个
+                </div>
+              )}
+            </div>
           </div>
         )}
 

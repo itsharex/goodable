@@ -943,6 +943,14 @@ export async function executeClaude(
       console.log(`[ClaudeService] 🔧 Set CLAUDE_CODE_GIT_BASH_PATH: ${builtinGitBashPath}`);
     }
 
+    // Load enabled skills as plugins
+    const { getEnabledSkillPaths } = await import('@/lib/services/skill-service');
+    const enabledSkillPaths = await getEnabledSkillPaths();
+    const plugins = enabledSkillPaths.map(p => ({ type: 'local' as const, path: p }));
+    if (plugins.length > 0) {
+      console.log(`[ClaudeService] 🧩 Loading ${plugins.length} skill plugins:`, enabledSkillPaths);
+    }
+
     const response = query({
       prompt: instruction,
       options: {
@@ -955,6 +963,9 @@ export async function executeClaude(
         maxOutputTokens,
         pathToClaudeCodeExecutable: getClaudeCodeExecutablePath(),
         env: envWithBuiltinNode,  // 传入修改后的环境变量
+        plugins: plugins.length > 0 ? plugins : undefined,
+        allowedTools: plugins.length > 0 ? ['Skill', 'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep'] : undefined,
+        settingSources: plugins.length > 0 ? ['project'] : undefined,
         stderr: (data: string) => {
           const line = String(data).trimEnd();
           if (!line) return;

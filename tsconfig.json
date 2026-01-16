@@ -42,7 +42,11 @@
     "data/projects",
     "data/projects.old",
     "data/user-templates",
+    "data/user-skills",
     "tests/**",
-    "templates"
+    "templates",
+    "skill-demo",
+    "skills",
+    "demo"
   ]
 }

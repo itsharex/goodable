@@ -107,7 +107,7 @@ interface ServiceToken {
 }
 
 export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agents', embedded = false }: GlobalSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'ai-agents' | 'services' | 'prompts'>(initialTab === 'general' ? 'ai-agents' : initialTab);
+  const [activeTab, setActiveTab] = useState<'general' | 'ai-agents' | 'services' | 'prompts'>(initialTab === 'general' ? 'ai-agents' : (initialTab as 'ai-agents' | 'services' | 'prompts'));
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'github' | 'supabase' | 'vercel' | null>(null);
   const [tokens, setTokens] = useState<{ [key: string]: ServiceToken | null }>({

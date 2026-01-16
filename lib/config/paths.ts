@@ -458,3 +458,107 @@ export function getBuiltinGitBashPath(): string | null {
   _cachedGitBashPath = null;
   return null;
 }
+
+// ========== Skills ==========
+
+/**
+ * Get builtin skills directory path
+ */
+function getSkillsDirectory(): string {
+  // Priority 1: Environment variable (set by Electron main process)
+  const envSkillsDir = process.env.SKILLS_DIR;
+  if (envSkillsDir && envSkillsDir.trim() !== '') {
+    const absolutePath = path.isAbsolute(envSkillsDir)
+      ? path.resolve(envSkillsDir)
+      : path.resolve(process.cwd(), envSkillsDir);
+
+    if (fs.existsSync(absolutePath)) {
+      console.log(`[PathConfig] ✅ Builtin skills directory configured: ${absolutePath}`);
+      return absolutePath;
+    }
+  }
+
+  // Priority 2: Electron's process.resourcesPath (production)
+  const electronResourcesPath = (process as any).resourcesPath as string | undefined;
+  if (electronResourcesPath && fs.existsSync(electronResourcesPath)) {
+    const skillsPath = path.join(electronResourcesPath, 'skills');
+    if (fs.existsSync(skillsPath)) {
+      console.log(`[PathConfig] ✅ Builtin skills directory (production): ${skillsPath}`);
+      return skillsPath;
+    }
+  }
+
+  // Priority 3: Development fallback - use skills/ in project root
+  const skillsPath = path.join(process.cwd(), 'skills');
+
+  try {
+    if (!fs.existsSync(skillsPath)) {
+      console.log(`[PathConfig] Creating builtin skills directory: ${skillsPath}`);
+      fs.mkdirSync(skillsPath, { recursive: true });
+    }
+    console.log(`[PathConfig] ✅ Builtin skills directory configured: ${skillsPath}`);
+  } catch (error) {
+    console.warn(`[PathConfig] ⚠️ Cannot access builtin skills directory: ${skillsPath}`);
+  }
+
+  return skillsPath;
+}
+
+/**
+ * Absolute path to builtin skills directory
+ */
+export const SKILLS_DIR_ABSOLUTE = getSkillsDirectory();
+
+/**
+ * Get user skills directory path (for imported skills)
+ */
+function getUserSkillsDirectory(): string {
+  // Priority 1: Environment variable (set by Electron main process)
+  const envUserSkillsDir = process.env.USER_SKILLS_DIR;
+  if (envUserSkillsDir && envUserSkillsDir.trim() !== '') {
+    const absolutePath = path.isAbsolute(envUserSkillsDir)
+      ? path.resolve(envUserSkillsDir)
+      : path.resolve(process.cwd(), envUserSkillsDir);
+
+    try {
+      if (!fs.existsSync(absolutePath)) {
+        console.log(`[PathConfig] Creating user skills directory: ${absolutePath}`);
+        fs.mkdirSync(absolutePath, { recursive: true });
+      }
+      console.log(`[PathConfig] ✅ User skills directory configured: ${absolutePath}`);
+    } catch (error) {
+      console.warn(`[PathConfig] ⚠️ Cannot access user skills directory: ${absolutePath}`);
+    }
+
+    return absolutePath;
+  }
+
+  // Priority 2: Development fallback - use data/user-skills
+  const userSkillsPath = path.join(process.cwd(), 'data', 'user-skills');
+
+  try {
+    if (!fs.existsSync(userSkillsPath)) {
+      console.log(`[PathConfig] Creating user skills directory: ${userSkillsPath}`);
+      fs.mkdirSync(userSkillsPath, { recursive: true });
+    }
+    console.log(`[PathConfig] ✅ User skills directory configured: ${userSkillsPath}`);
+  } catch (error) {
+    console.warn(`[PathConfig] ⚠️ Cannot access user skills directory: ${userSkillsPath}`);
+  }
+
+  return userSkillsPath;
+}
+
+/**
+ * Absolute path to user skills directory (imported skills)
+ */
+export const USER_SKILLS_DIR_ABSOLUTE = getUserSkillsDirectory();
+
+/**
+ * Get skill settings file path (stores enabled/disabled state)
+ */
+export function getSkillSettingsPath(): string {
+  // Use same directory as user skills
+  const userSkillsDir = getUserSkillsDirectory();
+  return path.join(path.dirname(userSkillsDir), 'skill-settings.json');
+}

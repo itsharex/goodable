@@ -26,7 +26,10 @@ contextBridge.exposeInMainWorld('desktopAPI', {
       const handler = (event, state) => callback(state);
       ipcRenderer.on('window-state-changed', handler);
       return () => ipcRenderer.removeListener('window-state-changed', handler);
-    }
+    },
+    // Window size control (for slim mode)
+    setSize: (options) => ipcRenderer.invoke('set-window-size', options),
+    getSize: () => ipcRenderer.invoke('get-window-size')
   },
 
   // 导航控制API
@@ -88,12 +91,6 @@ body.electron-custom-titlebar-active {
 `;
 
   (document.head || document.documentElement).appendChild(style);
-};
-
-const setButtonEnabledState = (button, enabled = true) => {
-  button.disabled = !enabled;
-  button.style.opacity = enabled ? '1' : '0.45';
-  button.style.cursor = enabled ? 'pointer' : 'default';
 };
 
 const createToolbarButton = (label, ariaLabel, options = {}) => {
@@ -247,7 +244,7 @@ const initCustomTitleBar = () => {
   Object.assign(leftSection.style, {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '8px',
     flex: '1',
     minWidth: '0'
   });
@@ -261,49 +258,54 @@ const initCustomTitleBar = () => {
   });
   rightSection.style.webkitAppRegion = 'no-drag';
 
-  const createNavButton = (label, ariaLabel, action, options = {}) => {
-    const button = createToolbarButton(label, ariaLabel, {
-      width: '30px',
-      height: '24px',
-      fontSize: options.fontSize || '13px'
-    });
+  // Refresh button
+  const refreshButton = createToolbarButton('⟳', '刷新', {
+    width: '30px',
+    height: '24px',
+    fontSize: '13px'
+  });
+  refreshButton.addEventListener('click', async (event) => {
+    event.stopPropagation();
+    const action = event.shiftKey ? 'force-refresh' : 'refresh';
+    try {
+      await ipcRenderer.invoke('window-navigation', { action });
+    } catch (error) {
+      console.error('执行刷新操作失败:', error);
+    }
+  });
 
-    const handleClick = async (event) => {
-      event.stopPropagation();
-      if (button.disabled) {
-        return;
-      }
-
-      const payloadAction = action === 'refresh' && event.shiftKey ? 'force-refresh' : action;
-
-      try {
-        const response = await ipcRenderer.invoke('window-navigation', { action: payloadAction });
-        if (response && response.state) {
-          updateNavigationButtons(response.state);
-        }
-      } catch (error) {
-        console.error(`执行导航操作失败: ${action}`, error);
-      }
-    };
-
-    button.addEventListener('click', handleClick);
-    return button;
-  };
-
-  const backButton = createNavButton('←', '后退', 'back');
-  const forwardButton = createNavButton('→', '前进', 'forward');
-  const refreshButton = createNavButton('⟳', '刷新', 'refresh');
-  setButtonEnabledState(backButton, false);
-  setButtonEnabledState(forwardButton, false);
-
-  const updateNavigationButtons = (state = {}) => {
-    setButtonEnabledState(backButton, !!state.canGoBack);
-    setButtonEnabledState(forwardButton, !!state.canGoForward);
-  };
-
-  navGroup.appendChild(backButton);
-  navGroup.appendChild(forwardButton);
   navGroup.appendChild(refreshButton);
+
+  // Slim mode toggle button - placed in left section before title
+  const SLIM_MODE_KEY = 'goodable_slim_mode';
+  const slimModeButton = createToolbarButton('⊟', '瘦身模式', {
+    width: '28px',
+    height: '24px',
+    fontSize: '14px'
+  });
+  slimModeButton.id = 'electron-slim-mode-button';
+  slimModeButton.style.webkitAppRegion = 'no-drag';
+
+  // Initialize button state from localStorage
+  const updateSlimButtonState = () => {
+    const isSlim = localStorage.getItem(SLIM_MODE_KEY) === 'true';
+    slimModeButton.textContent = isSlim ? '⊞' : '⊟';
+    slimModeButton.style.color = isSlim ? '#38bdf8' : '#e2e8f0';
+  };
+  updateSlimButtonState();
+
+  slimModeButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    // Dispatch custom event for React to handle (useSlimMode hook will update localStorage)
+    window.dispatchEvent(new CustomEvent('electron-toggle-slim-mode'));
+    // Update button appearance after a brief delay to allow React to update localStorage
+    setTimeout(updateSlimButtonState, 50);
+  });
+
+  // Listen for slim mode changes from React
+  window.addEventListener('goodable-slim-mode-changed', () => {
+    updateSlimButtonState();
+  });
 
   const titleSection = document.createElement('div');
   Object.assign(titleSection.style, {
@@ -400,7 +402,9 @@ const initCustomTitleBar = () => {
   newWindowButton.addEventListener('click', async (event) => {
     event.stopPropagation();
     try {
-      const result = await ipcRenderer.invoke('open-new-window');
+      // Check if current window is in slim mode, pass to new window
+      const isSlimMode = localStorage.getItem(SLIM_MODE_KEY) === 'true';
+      const result = await ipcRenderer.invoke('open-new-window', { slimMode: isSlimMode });
       if (!result.success && result.message) {
         // 显示提示信息（可选：使用 alert 或其他方式）
         alert(result.message);
@@ -410,16 +414,24 @@ const initCustomTitleBar = () => {
     }
   });
 
-  controlsSection.appendChild(minimizeButton);
-  controlsSection.appendChild(maximizeButton);
-  controlsSection.appendChild(closeButton);
+  // Only show window control buttons on non-macOS (Windows/Linux)
+  // macOS has native traffic light buttons
+  if (!isMac) {
+    controlsSection.appendChild(minimizeButton);
+    controlsSection.appendChild(maximizeButton);
+    controlsSection.appendChild(closeButton);
+  }
 
+  leftSection.appendChild(slimModeButton);
   leftSection.appendChild(titleSection);
 
   rightSection.appendChild(navGroup);
   rightSection.appendChild(devToolsButton);
   rightSection.appendChild(newWindowButton);
-  rightSection.appendChild(controlsSection);
+  // Only append controlsSection if it has children (non-macOS)
+  if (!isMac) {
+    rightSection.appendChild(controlsSection);
+  }
 
   titleBar.appendChild(leftSection);
   titleBar.appendChild(rightSection);
@@ -434,18 +446,6 @@ const initCustomTitleBar = () => {
   ipcRenderer.on('window-state-changed', (event, state) => {
     updateMaximizeVisual(state?.isMaximized);
   });
-
-  const requestNavState = () => {
-    ipcRenderer.invoke('get-navigation-state')
-      .then((state) => updateNavigationButtons(state))
-      .catch(() => updateNavigationButtons({}));
-  };
-
-  ipcRenderer.on('navigation-state-changed', (event, state) => {
-    updateNavigationButtons(state);
-  });
-
-  requestNavState();
 
   titleBar.addEventListener('dblclick', () => {
     ipcRenderer.invoke('window-control', { action: 'toggle-maximize' });

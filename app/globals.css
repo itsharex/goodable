@@ -270,3 +270,17 @@
     to { opacity: 1; }
   }
 }
+
+/* Slim mode responsive layout - auto-hide preview when window < 500px */
+@media (max-width: 500px) {
+  /* Chat panel takes full width in slim mode */
+  .chat-panel-responsive {
+    width: 100% !important;
+  }
+
+  /* Preview panel hidden in slim mode */
+  .preview-panel-responsive {
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+}

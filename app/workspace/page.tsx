@@ -10,6 +10,7 @@ import EmployeeDropdown from '@/components/employees/EmployeeDropdown';
 import EmployeeList from '@/components/employees/EmployeeList';
 import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users, Sparkles } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+import { useSlimMode } from '@/hooks/useSlimMode';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 import type { Employee } from '@/types/backend/employee';
 import {
@@ -68,6 +69,9 @@ function WorkspaceContent() {
   const [workHomeTab, setWorkHomeTab] = useState<'tips' | 'recent'>('tips');
   const [inputControl, setInputControl] = useState<{ focus: () => void; setMessage: (msg: string) => void } | null>(null);
   const { settings: globalSettings } = useGlobalSettings();
+
+  // Global slim mode - enables window size toggle from title bar
+  useSlimMode();
 
   // Employee state
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
@@ -551,11 +555,11 @@ function WorkspaceContent() {
               </button>
             </div>
 
-            <div className="w-full max-w-4xl px-8 mt-24">
-              <h1 className="text-4xl font-bold text-gray-900 mb-1.5 text-center">
+            <div className="w-full max-w-4xl px-4 sm:px-8 mt-24">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-1.5 text-center">
                 Goodable
               </h1>
-              <p className="text-gray-600 mb-6 text-center">
+              <p className="text-sm sm:text-base text-gray-600 mb-6 text-center">
                 {workMode === 'work'
                   ? '本地电脑助手，帮你整理文件夹、提取报销单、解析合同、筛选简历等自动化任务！'
                   : '开箱即用，内置1000+应用模板，专门为普通用户设计的软件生成器！'}
@@ -585,24 +589,24 @@ function WorkspaceContent() {
 
               {/* Quick Action Chips - only show in code mode */}
               {workMode === 'code' && (
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                   <button
                     onClick={() => handleCreateProject("做一个万能短视频下载工具")}
-                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                    className="px-2 sm:px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
                   >
-                    做一个万能短视频下载工具
+                    短视频下载
                   </button>
                   <button
                     onClick={() => handleCreateProject("做一个飞书文档一键变网站的工具")}
-                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                    className="px-2 sm:px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
                   >
-                    做一个飞书文档一键变网站的工具
+                    飞书变网站
                   </button>
                   <button
                     onClick={() => handleCreateProject("做一个微信群智能助手")}
-                    className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
+                    className="px-2 sm:px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
                   >
-                    做一个微信群智能助手
+                    微信群助手
                   </button>
                 </div>
               )}
@@ -610,7 +614,7 @@ function WorkspaceContent() {
 
             {/* Tab Switcher - Different for code vs work mode */}
             {workMode === 'code' ? (
-              <div className="w-full max-w-5xl px-8 mt-12 flex items-center justify-start gap-6 border-b border-gray-200">
+              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto">
                 {[
                   { key: 'templates' as const, label: '模板市场', showCount: false },
                   { key: 'deployed' as const, label: '已部署到阿里云', showCount: true, count: projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').length },
@@ -621,7 +625,7 @@ function WorkspaceContent() {
                     <button
                       key={key}
                       onClick={() => setHomeTab(key)}
-                      className={`px-1 pb-3 text-sm border-b-2 transition-colors ${
+                      className={`px-1 pb-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                         isActive
                           ? 'border-gray-900 text-gray-900 font-medium'
                           : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -633,7 +637,7 @@ function WorkspaceContent() {
                 })}
               </div>
             ) : (
-              <div className="w-full max-w-5xl px-8 mt-12 flex items-center justify-start gap-6 border-b border-gray-200">
+              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto">
                 {[
                   { key: 'tips' as const, label: '使用提醒' },
                   { key: 'recent' as const, label: '最近操作', count: projects.filter((p: any) => p.mode === 'work').length },
@@ -643,7 +647,7 @@ function WorkspaceContent() {
                     <button
                       key={key}
                       onClick={() => setWorkHomeTab(key)}
-                      className={`px-1 pb-3 text-sm border-b-2 transition-colors ${
+                      className={`px-1 pb-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                         isActive
                           ? 'border-gray-900 text-gray-900 font-medium'
                           : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -657,13 +661,13 @@ function WorkspaceContent() {
             )}
 
             {/* Card Display Area */}
-            <div className="w-full max-w-5xl px-8 mt-4 pb-8">
+            <div className="w-full max-w-5xl px-4 sm:px-8 mt-4 pb-8">
               {/* Code Mode Content */}
               {workMode === 'code' && (
                 <>
                   {/* Templates Tab */}
                   {homeTab === 'templates' && (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                    <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                       {templates.filter(t => t.isDownloaded !== false).slice(0, 4).length === 0 ? (
                         <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无模板</div>
                       ) : (
@@ -713,7 +717,7 @@ function WorkspaceContent() {
 
                   {/* Deployed Apps Tab */}
                   {homeTab === 'deployed' && (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                    <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                       {projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').slice(0, 4).length === 0 ? (
                         <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无已部署应用</div>
                       ) : (
@@ -783,7 +787,7 @@ function WorkspaceContent() {
 
                   {/* Developed Apps Tab */}
                   {homeTab === 'developed' && (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                    <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                       {projects.filter((p: any) => p.dependenciesInstalled === true && !p.deployedUrl && p.mode !== 'work').slice(0, 4).length === 0 ? (
                         <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无开发完成的应用</div>
                       ) : (
@@ -858,7 +862,7 @@ function WorkspaceContent() {
                 <>
                   {/* Tips Tab - 使用提醒 */}
                   {workHomeTab === 'tips' && (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                    <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                       {[
                         {
                           icon: <FolderOpen className="w-8 h-8 text-green-500" />,
@@ -904,7 +908,7 @@ function WorkspaceContent() {
 
                   {/* Recent Tab - 最近操作 */}
                   {workHomeTab === 'recent' && (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+                    <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                       {projects.filter((p: any) => p.mode === 'work').slice(0, 4).length === 0 ? (
                         <div className="text-center py-8 text-gray-500 text-sm col-span-full">暂无操作记录</div>
                       ) : (
@@ -983,7 +987,7 @@ function WorkspaceContent() {
                 <p className="text-sm text-gray-400 mt-2">加载中...</p>
               </div>
             ) : (
-              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+              <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                 {templates.map((template) => {
                   const isDownloaded = template.isDownloaded !== false;
 
@@ -1098,7 +1102,7 @@ function WorkspaceContent() {
                 <p className="text-gray-500">还没有项目</p>
               </div>
             ) : (
-              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))' }}>
+              <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
                 {projects
                   .filter((project: any) => {
                     if (filterStatus === null) return true;

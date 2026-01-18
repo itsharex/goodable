@@ -9,7 +9,7 @@ import {
   File as FileIcon, FileCode, Palette, Braces, Atom, Workflow, Ship, GitBranch, FileText,
   Database, Coffee, Triangle, Lock, Home, ChevronUp, ChevronRight, ChevronDown,
   ArrowLeft, ArrowRight, RotateCcw, Share2, Type, Bird, Gem, Flame, List, Plus,
-  HelpCircle, ExternalLink, Grid
+  HelpCircle, Grid, Maximize2, User
 } from 'lucide-react';
 import ChatLog from '@/components/chat/ChatLog';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
@@ -18,6 +18,7 @@ import ChatInput from '@/components/chat/ChatInput';
 import { ChatErrorBoundary } from '@/components/ErrorBoundary';
 import AppSidebar from '@/components/layout/AppSidebar';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
+import { useSlimMode } from '@/hooks/useSlimMode';
 import AliyunDeployPage from '@/components/deploy/AliyunDeployPage';
 import PreviewTabs from '@/components/preview/PreviewTabs';
 import FileGridView from '@/components/files/FileGridView';
@@ -272,6 +273,7 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const [projectName, setProjectName] = useState<string>('');
   const [projectDescription, setProjectDescription] = useState<string>('');
+  const [employeeName, setEmployeeName] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [previewInstanceId, setPreviewInstanceId] = useState<number | null>(null);
@@ -332,7 +334,18 @@ export default function ChatPage() {
   const [isTimelineSseConnected, setIsTimelineSseConnected] = useState(false);
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const timelineEventSourceRef = useRef<EventSource | null>(null);
-  const [deviceMode, setDeviceMode] = useState<'desktop'|'mobile'>('desktop');
+
+  // Global slim mode - just for reading state, window resize is handled by hook
+  useSlimMode();
+
+  // Preview mode: fullscreen, normal, mobile (layout auto-adapts via CSS for slim windows)
+  const [previewMode, setPreviewMode] = useState<'mobile' | 'normal' | 'fullscreen'>('normal');
+
+  // Handle preview mode change
+  const handlePreviewModeChange = (newMode: 'mobile' | 'normal' | 'fullscreen') => {
+    setPreviewMode(newMode);
+  };
+
   const [uploadedImages, setUploadedImages] = useState<{name: string; url: string; base64?: string; path?: string}[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
   // Initialize states with default values, will be loaded from localStorage in useEffect
@@ -1697,6 +1710,23 @@ const persistProjectPreferences = useCallback(
 
       setProjectName(project.name || `Project ${projectId.slice(0, 8)}`);
 
+      // Load employee name if employee_id exists
+      const employeeId = project.employee_id;
+      if (employeeId) {
+        try {
+          const empRes = await fetch(`${API_BASE}/api/employees/${employeeId}`);
+          if (empRes.ok) {
+            const empPayload = await empRes.json();
+            const emp = empPayload?.data ?? empPayload;
+            if (emp?.name) {
+              setEmployeeName(emp.name);
+            }
+          }
+        } catch {
+          // Ignore employee fetch errors
+        }
+      }
+
       const projectCli = sanitizeCli(rawPreferredCli || preferredCli);
       if (rawPreferredCli) {
         updatePreferredCli(projectCli);
@@ -2631,35 +2661,34 @@ const persistProjectPreferences = useCallback(
         <div className="h-full flex-1 flex min-w-0 overflow-hidden">
           {/* Left: Chat window or Main Content */}
           <div
-            style={{ width: currentView === 'chat' ? '35%' : '100%' }}
-            className="h-full border-r border-gray-200 flex flex-col min-w-0 flex-shrink-0 overflow-hidden"
+            style={{
+              width: currentView === 'chat'
+                ? (previewMode === 'fullscreen' ? '0' : previewMode === 'mobile' ? '60%' : '35%')
+                : '100%',
+              overflow: previewMode === 'fullscreen' ? 'hidden' : undefined
+            }}
+            className="h-full border-r border-gray-200 flex flex-col min-w-0 flex-shrink-0 overflow-hidden transition-all duration-300 chat-panel-responsive"
           >
             {currentView === 'chat' && (
               <>
             {/* Chat header */}
-            <div className="bg-white border-b border-gray-200 p-4 h-[73px] flex items-center">
-              <div className="flex items-center gap-3 w-full">
+            <div className="bg-white border-b border-gray-200 px-4 h-12 flex items-center justify-center">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => router.push('/workspace?view=apps')}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
+                  className="absolute left-4 flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                   title="返回我的应用"
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M19 12H5M12 19L5 12L12 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </button>
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-lg font-semibold text-gray-900 truncate">
-                    {typeof projectName === 'string'
-                      ? (projectName.length > 30 ? `${projectName.slice(0, 30)}…` : projectName)
-                      : 'Loading...'}
-                  </h1>
-                  {projectDescription && (
-                    <p className="text-sm text-gray-500 truncate">
-                      {projectDescription}
-                    </p>
-                  )}
+                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                  <User className="w-4 h-4 text-gray-500" />
                 </div>
+                <span className="text-base font-semibold text-gray-900 truncate">
+                  {employeeName || projectName || 'Loading...'}
+                </span>
               </div>
             </div>
             
@@ -2930,16 +2959,61 @@ const persistProjectPreferences = useCallback(
 
           {/* Right: Preview/Code area - Only show in chat view */}
           {currentView === 'chat' && (
-            <div className="h-full flex flex-col bg-gray-50 min-w-0 flex-shrink-0 overflow-hidden" style={{ width: '65%' }}>
+            <div
+              className="h-full flex flex-col bg-gray-50 min-w-0 flex-shrink-0 overflow-hidden transition-all duration-300 preview-panel-responsive"
+              style={{
+                width: previewMode === 'fullscreen' ? '100%' : previewMode === 'mobile' ? '40%' : '65%',
+              }}
+            >
             {/* Content area */}
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Controls Bar */}
-              <div className="bg-white border-b border-gray-200 px-4 h-[73px] flex items-center relative">
-                <div className="flex items-center gap-3">
+              <div className="bg-white border-b border-gray-200 px-3 h-12 flex items-center relative">
+                <div className="flex items-center gap-2">
+                  {/* Preview Mode Toggle */}
+                  <div className="h-8 flex items-center gap-0.5 bg-gray-100 rounded-lg px-0.5 border border-gray-200">
+                    <button
+                      aria-label="全屏模式"
+                      className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
+                        previewMode === 'fullscreen'
+                          ? 'text-blue-600 bg-blue-50 '
+                          : 'text-gray-400 hover:text-gray-600 '
+                      }`}
+                      onClick={() => handlePreviewModeChange('fullscreen')}
+                      title="全屏模式"
+                    >
+                      <Maximize2 size={14} />
+                    </button>
+                    <button
+                      aria-label="正常模式"
+                      className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
+                        previewMode === 'normal'
+                          ? 'text-blue-600 bg-blue-50 '
+                          : 'text-gray-400 hover:text-gray-600 '
+                      }`}
+                      onClick={() => handlePreviewModeChange('normal')}
+                      title="正常模式"
+                    >
+                      <Monitor size={14} />
+                    </button>
+                    <button
+                      aria-label="手机模式"
+                      className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
+                        previewMode === 'mobile'
+                          ? 'text-blue-600 bg-blue-50 '
+                          : 'text-gray-400 hover:text-gray-600 '
+                      }`}
+                      onClick={() => handlePreviewModeChange('mobile')}
+                      title="手机模式"
+                    >
+                      <Smartphone size={14} />
+                    </button>
+                  </div>
+
                   {/* Toggle switch */}
-                  <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                  <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
                       <button
-                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center ${
                           showPreview && !showConsole && !showSettings && !showAliyunDeploy
                             ? 'bg-white text-gray-900 '
                             : 'text-gray-600 hover:text-gray-900 '
@@ -2947,11 +3021,11 @@ const persistProjectPreferences = useCallback(
                         onClick={() => { setShowPreview(true); setShowConsole(false); setShowSettings(false); setShowAliyunDeploy(false); try { fetch(`${API_BASE}/api/projects/${projectId}/log/frontend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'preview.toggle', message: 'Show preview', level: 'info' }) }); } catch {} }}
                         title="Preview"
                       >
-                        <span className="w-4 h-4 flex items-center justify-center"><Monitor size={16} /></span>
+                        <span className="w-4 h-4 flex items-center justify-center"><Monitor size={14} /></span>
                         {showPreview && !showConsole && !showSettings && !showAliyunDeploy && <span className="ml-1">预览</span>}
                       </button>
                     <button
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center ${
                         !showPreview && !showConsole && !showSettings && !showAliyunDeploy
                           ? 'bg-white text-gray-900 '
                           : 'text-gray-600 hover:text-gray-900 '
@@ -2967,11 +3041,11 @@ const persistProjectPreferences = useCallback(
                       }}
                       title="Code"
                     >
-                      <span className="w-4 h-4 flex items-center justify-center"><Code size={16} /></span>
+                      <span className="w-4 h-4 flex items-center justify-center"><Code size={14} /></span>
                       {!showPreview && !showConsole && !showSettings && !showAliyunDeploy && <span className="ml-1">文件</span>}
                     </button>
                     <button
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center ${
                         showConsole
                           ? 'bg-white text-gray-900 '
                           : 'text-gray-600 hover:text-gray-900 '
@@ -2986,7 +3060,7 @@ const persistProjectPreferences = useCallback(
                       title="Console"
                     >
                       <span className="w-4 h-4 flex items-center justify-center">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="4 17 10 11 4 5"></polyline>
                           <line x1="12" y1="19" x2="20" y2="19"></line>
                         </svg>
@@ -2994,7 +3068,7 @@ const persistProjectPreferences = useCallback(
                       {showConsole && <span className="ml-1">控制台</span>}
                     </button>
                     <button
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                      className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center ${
                         showSettings
                           ? 'bg-white text-gray-900 '
                           : 'text-gray-600 hover:text-gray-900 '
@@ -3007,13 +3081,13 @@ const persistProjectPreferences = useCallback(
                       }}
                       title="Settings"
                     >
-                      <span className="w-4 h-4 flex items-center justify-center"><Settings size={16} /></span>
+                      <span className="w-4 h-4 flex items-center justify-center"><Settings size={14} /></span>
                       {showSettings && <span className="ml-1">设置</span>}
                     </button>
                     {/* 只在 code 模式下显示发布按钮 */}
                     {projectMode === 'code' && (
                       <button
-                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center ${
+                        className={`px-2 py-1 text-xs font-medium rounded-md transition-colors flex items-center ${
                           showAliyunDeploy
                             ? 'bg-white text-gray-900 '
                             : 'text-gray-600 hover:text-gray-900 '
@@ -3026,24 +3100,21 @@ const persistProjectPreferences = useCallback(
                         }}
                         title="Deploy"
                       >
-                        <span className="w-4 h-4 flex items-center justify-center"><Share2 size={16} /></span>
+                        <span className="w-4 h-4 flex items-center justify-center"><Share2 size={14} /></span>
                         {showAliyunDeploy && <span className="ml-1">发布</span>}
                       </button>
                     )}
                   </div>
-                  
-                  {/* Center Controls */}
+
+                  {/* Center Controls - Only show when preview URL is available */}
                   {showPreview && previewUrl && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       {/* Route Navigation */}
-                      <div className="h-9 flex items-center bg-gray-100 rounded-lg px-3 border border-gray-200 ">
-                        <span className="text-gray-400 mr-2">
-                          <Home size={12} />
+                      <div className="h-8 flex items-center bg-gray-100 rounded-lg px-2 border border-gray-200 ">
+                        <span className="text-gray-400 mr-1.5 cursor-help" title={previewUrl || ''}>
+                          <Home size={11} />
                         </span>
-                        {previewOrigin && (
-                          <span className="text-sm text-gray-700 font-mono mr-1">{previewOrigin}</span>
-                        )}
-                        <span className="text-sm text-gray-500 mr-1">/</span>
+                        <span className="text-xs text-gray-500 mr-1">/</span>
                         <input
                           type="text"
                           value={currentRoute.startsWith('/') ? currentRoute.slice(1) : currentRoute}
@@ -3056,21 +3127,20 @@ const persistProjectPreferences = useCallback(
                               navigateToRoute(currentRoute);
                             }
                           }}
-                          className="bg-transparent text-sm text-gray-700 outline-none w-10"
+                          className="bg-transparent text-xs text-gray-700 outline-none w-10"
                           placeholder="route"
                         />
                       <button
                         onClick={() => navigateToRoute(currentRoute)}
-                        className="ml-2 text-gray-500 hover:text-gray-700 "
+                        className="ml-1.5 text-gray-500 hover:text-gray-700 "
                       >
-                        <ArrowRight size={12} />
+                        <ArrowRight size={11} />
                       </button>
                       </div>
-                      
-                      {/* Action Buttons Group */}
-                      <div className="flex items-center gap-1.5">
-                        <button 
-                          className="h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
+
+                      {/* Refresh Button */}
+                      <button
+                        className="h-8 w-8 flex items-center justify-center bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
                         onClick={() => {
                           const iframe = document.querySelector('iframe');
                           if (iframe) {
@@ -3080,56 +3150,17 @@ const persistProjectPreferences = useCallback(
                         }}
                         title="Refresh preview"
                       >
-                        <RotateCcw size={14} />
+                        <RotateCcw size={13} />
                       </button>
-                        
-                        {/* Device Mode Toggle */}
-                        <div className="h-9 flex items-center gap-1 bg-gray-100 rounded-lg px-1 border border-gray-200 ">
-                          <button
-                            aria-label="Desktop preview"
-                            className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
-                              deviceMode === 'desktop' 
-                                ? 'text-blue-600 bg-blue-50 ' 
-                                : 'text-gray-400 hover:text-gray-600 '
-                            }`}
-                            onClick={() => setDeviceMode('desktop')}
-                          >
-                            <Monitor size={14} />
-                          </button>
-                          <button
-                            aria-label="Mobile preview"
-                            className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
-                              deviceMode === 'mobile'
-                                ? 'text-blue-600 bg-blue-50 '
-                                : 'text-gray-400 hover:text-gray-600 '
-                            }`}
-                            onClick={() => setDeviceMode('mobile')}
-                          >
-                            <Smartphone size={14} />
-                          </button>
-                          <button
-                            aria-label="在浏览器中打开"
-                            className="h-7 w-7 flex items-center justify-center rounded transition-colors text-gray-400 hover:text-gray-600"
-                            onClick={() => {
-                              if (previewUrl) {
-                                window.open(previewUrl, '_blank');
-                              }
-                            }}
-                            title="在浏览器中打开"
-                          >
-                            <ExternalLink size={14} />
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 ml-auto-bak">
+                <div className="flex items-center gap-1 ml-auto">
                   {/* Preview Button - Show when preview is not running */}
                   {showPreview && !previewUrl && !isStartingPreview && (
                     <button
-                      className="h-9 px-3 bg-black hover:bg-gray-900 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      className="h-8 px-3 bg-black hover:bg-gray-900 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
                       onClick={start}
                     >
                       启动
@@ -3139,7 +3170,7 @@ const persistProjectPreferences = useCallback(
                   {/* Stop Button - Show when preview is running */}
                   {showPreview && previewUrl && (
                     <button
-                      className="h-9 px-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={stop}
                       disabled={isStopping}
                     >
@@ -3301,13 +3332,7 @@ const persistProjectPreferences = useCallback(
                   >
                 {previewUrl ? (
                   <div className="relative w-full h-full bg-gray-100 flex items-center justify-center">
-                    <div 
-                      className={`bg-white ${
-                        deviceMode === 'mobile' 
-                          ? 'w-[375px] h-[667px] rounded-[25px] border-8 border-gray-800 shadow-2xl' 
-                          : 'w-full h-full'
-                      } overflow-hidden`}
-                    >
+                    <div className="bg-white w-full h-full overflow-hidden">
                       {previewError && (
                         <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 shadow">
                           <span className="text-sm truncate flex-1 min-w-0">{previewError}</span>

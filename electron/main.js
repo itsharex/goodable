@@ -603,10 +603,10 @@ async function createMainWindow() {
     }
   }, 1500);
 
-  // 开发模式下打开开发者工具
-  if (isDev) {
-    mainWindow.webContents.openDevTools({ mode: 'detach', activate: true });
-  }
+  // 开发模式下不再默认打开开发者工具（可通过标题栏按钮手动打开）
+  // if (isDev) {
+  //   mainWindow.webContents.openDevTools({ mode: 'detach', activate: true });
+  // }
 
   // 注册窗口状态变化事件
   registerWindowStateEvents(mainWindow);
@@ -847,9 +847,57 @@ function registerIpcHandlers() {
     }
   });
 
+  // Set window size (for slim mode)
+  ipcMain.handle('set-window-size', async (event, { width, height, minWidth, minHeight } = {}) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return { success: false, error: '窗口不存在' };
+    }
+
+    try {
+      // Set minimum size first if provided (to allow smaller sizes like slim mode)
+      if (typeof minWidth === 'number' || typeof minHeight === 'number') {
+        const currentMinSize = targetWindow.getMinimumSize();
+        targetWindow.setMinimumSize(
+          typeof minWidth === 'number' ? minWidth : currentMinSize[0],
+          typeof minHeight === 'number' ? minHeight : currentMinSize[1]
+        );
+      }
+
+      // Set window size
+      if (typeof width === 'number' && typeof height === 'number') {
+        targetWindow.setSize(width, height, true);
+      } else if (typeof width === 'number') {
+        const currentSize = targetWindow.getSize();
+        targetWindow.setSize(width, currentSize[1], true);
+      } else if (typeof height === 'number') {
+        const currentSize = targetWindow.getSize();
+        targetWindow.setSize(currentSize[0], height, true);
+      }
+
+      return { success: true, size: targetWindow.getSize() };
+    } catch (error) {
+      console.error('设置窗口大小失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Get window size
+  ipcMain.handle('get-window-size', async (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return { width: 0, height: 0 };
+    }
+
+    const [width, height] = targetWindow.getSize();
+    return { width, height };
+  });
+
   // 打开新窗口
-  ipcMain.handle('open-new-window', async (event) => {
-    const MAX_WINDOWS = 5;
+  ipcMain.handle('open-new-window', async (event, options = {}) => {
+    const MAX_WINDOWS = 8;
     const currentWindowCount = BrowserWindow.getAllWindows().length;
 
     if (currentWindowCount >= MAX_WINDOWS) {
@@ -860,10 +908,29 @@ function registerIpcHandlers() {
     }
 
     try {
-      // 获取当前窗口位置，新窗口错开显示
+      // 获取当前窗口位置和尺寸
       const sourceWindow = BrowserWindow.fromWebContents(event.sender);
-      const [x, y] = sourceWindow ? sourceWindow.getPosition() : [100, 100];
-      const offset = 30;
+      const [srcX, srcY] = sourceWindow ? sourceWindow.getPosition() : [100, 100];
+      const [srcWidth] = sourceWindow ? sourceWindow.getSize() : [1280];
+
+      // Slim mode support: use smaller size if requested
+      const isSlimMode = options.slimMode === true;
+      const windowWidth = isSlimMode ? 420 : 1280;
+      const windowHeight = isSlimMode ? 550 : 800;
+      const windowMinWidth = isSlimMode ? 400 : 1024;
+      const windowMinHeight = isSlimMode ? 400 : 640;
+
+      // Calculate new window position
+      let newX, newY;
+      if (isSlimMode) {
+        // Slim mode: align horizontally with 5px gap
+        newX = srcX + srcWidth + 5;
+        newY = srcY;
+      } else {
+        // Normal mode: offset diagonally
+        newX = srcX + 30;
+        newY = srcY + 30;
+      }
 
       // 构建 workspace URL
       const baseUrl = isDev
@@ -874,12 +941,12 @@ function registerIpcHandlers() {
 
       // 创建新窗口
       const newWindow = new BrowserWindow({
-        width: 1280,
-        height: 800,
-        minWidth: 1024,
-        minHeight: 640,
-        x: x + offset,
-        y: y + offset,
+        width: windowWidth,
+        height: windowHeight,
+        minWidth: windowMinWidth,
+        minHeight: windowMinHeight,
+        x: newX,
+        y: newY,
         show: false,
         backgroundColor: '#111827',
         frame: false,
@@ -916,10 +983,10 @@ function registerIpcHandlers() {
       // 设置崩溃监控
       crashMonitor.setupRendererCrashMonitoring(newWindow, null);
 
-      // 开发模式下打开开发者工具
-      if (isDev) {
-        newWindow.webContents.openDevTools({ mode: 'detach', activate: true });
-      }
+      // 开发模式下不再默认打开开发者工具（可通过标题栏按钮手动打开）
+      // if (isDev) {
+      //   newWindow.webContents.openDevTools({ mode: 'detach', activate: true });
+      // }
 
       return { success: true };
     } catch (error) {

@@ -53,7 +53,16 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
   // 选择目录
-  selectDirectory: () => ipcRenderer.invoke('select-directory')
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
+
+  // Open folder in system file manager
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+
+  // Open new window with options
+  openNewWindow: (options) => ipcRenderer.invoke('open-new-window', options),
+
+  // Arrange slim windows in grid
+  arrangeSlimWindows: () => ipcRenderer.invoke('arrange-slim-windows')
 });
 
 // ==================== 自定义标题栏实现 ====================
@@ -294,8 +303,20 @@ const initCustomTitleBar = () => {
   };
   updateSlimButtonState();
 
-  slimModeButton.addEventListener('click', (event) => {
+  slimModeButton.addEventListener('click', async (event) => {
     event.stopPropagation();
+
+    // Shift+click: arrange all slim windows
+    if (event.shiftKey) {
+      try {
+        await ipcRenderer.invoke('arrange-slim-windows');
+      } catch (error) {
+        console.error('Failed to arrange slim windows:', error);
+      }
+      return;
+    }
+
+    // Normal click: toggle slim mode
     // Dispatch custom event for React to handle (useSlimMode hook will update localStorage)
     window.dispatchEvent(new CustomEvent('electron-toggle-slim-mode'));
     // Update button appearance after a brief delay to allow React to update localStorage

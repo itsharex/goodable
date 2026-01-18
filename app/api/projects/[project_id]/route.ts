@@ -72,6 +72,7 @@ export async function PUT(
       preferredCli: body.preferredCli,
       selectedModel: body.selectedModel,
       settings: body.settings,
+      work_directory: body.work_directory,
     };
 
     const project = await updateProject(project_id, input);

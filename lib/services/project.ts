@@ -103,21 +103,20 @@ export async function getProjectById(id: string): Promise<Project | null> {
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
   const mode = input.mode || 'code';
-  let projectPath: string;
 
-  // work 模式: projectType 强制为 'default'，不使用传入值
+  // work mode: projectType forced to 'default'
   const projectType = mode === 'work' ? 'default' : (input.projectType || 'nextjs');
 
-  if (mode === 'work') {
-    // work 模式使用用户指定的目录
-    projectPath = input.work_directory || '';
-    console.log(`[ProjectService] 📁 Work mode - work_directory: ${projectPath}`);
-  } else {
-    // code 模式创建项目目录
-    projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
-    await fs.mkdir(projectPath, { recursive: true });
-    console.log(`[ProjectService] 📁 Code mode - projectPath: ${projectPath}, projectType: ${projectType}`);
-  }
+  // Always create project directory
+  const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
+  await fs.mkdir(projectPath, { recursive: true });
+
+  // work mode: use user-specified work_directory or default to project directory
+  const workDirectory = mode === 'work'
+    ? (input.work_directory || projectPath)
+    : (input.work_directory ?? null);
+
+  console.log(`[ProjectService] 📁 mode: ${mode} | projectPath: ${projectPath} | work_directory: ${workDirectory || 'N/A'}`);
 
   const nowIso = new Date().toISOString();
 
@@ -135,7 +134,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       templateType: 'nextjs',
       projectType,
       mode,
-      work_directory: input.work_directory ?? null,
+      work_directory: workDirectory,
       employee_id: input.employee_id ?? null,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -156,7 +155,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       projectId: project.id,
       component: 'project',
       event: 'project.created',
-      metadata: { mode, projectType, work_directory: input.work_directory || null, repoPath: projectPath }
+      metadata: { mode, projectType, work_directory: workDirectory, repoPath: projectPath }
     });
   } catch (err) {
     console.warn('[ProjectService] Failed to write timeline log:', err);

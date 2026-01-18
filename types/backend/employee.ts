@@ -38,6 +38,7 @@ export interface Employee {
   description?: string;
   category: EmployeeCategoryKey;
   mode: EmployeeMode;
+  first_prompt?: string;
   system_prompt: string;
   system_prompt_plan?: string;
   system_prompt_execution?: string;
@@ -54,6 +55,7 @@ export interface CreateEmployeeInput {
   description?: string;
   category: EmployeeCategoryKey;
   mode: EmployeeMode;
+  first_prompt?: string;
   system_prompt: string;
   system_prompt_plan?: string;
   system_prompt_execution?: string;
@@ -67,6 +69,7 @@ export interface UpdateEmployeeInput {
   description?: string;
   category?: EmployeeCategoryKey;
   mode?: EmployeeMode;
+  first_prompt?: string;
   system_prompt?: string;
   system_prompt_plan?: string;
   system_prompt_execution?: string;

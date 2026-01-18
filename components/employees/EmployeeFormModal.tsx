@@ -28,6 +28,7 @@ export default function EmployeeFormModal({
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<EmployeeCategoryKey>('other');
   const [mode, setMode] = useState<EmployeeMode>('work');
+  const [firstPrompt, setFirstPrompt] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [systemPromptPlan, setSystemPromptPlan] = useState('');
   const [systemPromptExecution, setSystemPromptExecution] = useState('');
@@ -45,6 +46,7 @@ export default function EmployeeFormModal({
         setDescription(employee.description || '');
         setCategory(employee.category);
         setMode(employee.mode);
+        setFirstPrompt(employee.first_prompt || '');
         setSystemPrompt(employee.system_prompt || '');
         setSystemPromptPlan(employee.system_prompt_plan || '');
         setSystemPromptExecution(employee.system_prompt_execution || '');
@@ -53,6 +55,7 @@ export default function EmployeeFormModal({
         setDescription('');
         setCategory('other');
         setMode('work');
+        setFirstPrompt('');
         setSystemPrompt('');
         setSystemPromptPlan('');
         setSystemPromptExecution('');
@@ -89,6 +92,7 @@ export default function EmployeeFormModal({
       // Builtin employees can only update prompts
       const payload = isBuiltin
         ? {
+            first_prompt: firstPrompt.trim() || undefined,
             system_prompt: mode === 'work' ? systemPrompt.trim() : '',
             system_prompt_plan: mode === 'code' ? systemPromptPlan.trim() : undefined,
             system_prompt_execution: mode === 'code' ? systemPromptExecution.trim() : undefined,
@@ -98,6 +102,7 @@ export default function EmployeeFormModal({
             description: description.trim() || undefined,
             category,
             mode,
+            first_prompt: firstPrompt.trim() || undefined,
             system_prompt: mode === 'work' ? systemPrompt.trim() : '',
             system_prompt_plan: mode === 'code' ? systemPromptPlan.trim() : undefined,
             system_prompt_execution: mode === 'code' ? systemPromptExecution.trim() : undefined,
@@ -240,6 +245,19 @@ export default function EmployeeFormModal({
                 disabled={isBuiltin}
                 className={`flex-1 px-3 py-2 bg-gray-50 text-gray-900 placeholder-gray-400 text-sm rounded focus:outline-none focus:bg-gray-100 resize-none ${isBuiltin ? 'opacity-60 cursor-not-allowed' : ''}`}
                 maxLength={200}
+              />
+            </div>
+
+            {/* First Prompt - inline */}
+            <div className="flex items-start gap-4">
+              <label className="w-24 text-sm text-gray-600 flex-shrink-0 pt-2">第一句话</label>
+              <textarea
+                value={firstPrompt}
+                onChange={(e) => setFirstPrompt(e.target.value)}
+                placeholder="派活时自动发送的第一句话..."
+                rows={2}
+                className="flex-1 px-3 py-2 bg-gray-50 text-gray-900 placeholder-gray-400 text-sm rounded focus:outline-none focus:bg-gray-100 resize-none"
+                maxLength={500}
               />
             </div>
 

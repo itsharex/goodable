@@ -57,17 +57,14 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('project_id and name are required', undefined, 400);
     }
 
-    // work 模式需要 work_directory
-    if (mode === 'work' && !work_directory) {
-      return createErrorResponse('work_directory is required for work mode', undefined, 400);
-    }
+    // work mode: work_directory is optional, defaults to project directory
 
-    // 关键调试日志
+    // Debug log
     console.log(`[API] 📝 Creating project:`);
     console.log(`  - project_id: ${input.project_id}`);
     console.log(`  - mode: ${mode}`);
     console.log(`  - projectType: ${projectType}`);
-    console.log(`  - work_directory: ${work_directory || 'N/A'}`);
+    console.log(`  - work_directory: ${work_directory || '(will use project directory)'}`);
 
     // 演示模式前置检测：sourceProjectId 模式直接跳转，不创建新项目
     if (input.initialPrompt) {

@@ -354,6 +354,7 @@ export default function ChatPage() {
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>('initializing');
   const [projectMode, setProjectMode] = useState<'code' | 'work'>('code'); // 项目模式
   const [workDirectory, setWorkDirectory] = useState<string>(''); // work 模式的工作目录
+  const [projectPath, setProjectPath] = useState<string>(''); // 项目绝对路径
   const [initializationMessage, setInitializationMessage] = useState('Starting project initialization...');
   const [initialPromptSent, setInitialPromptSent] = useState(false);
   const initialPromptSentRef = useRef(false);
@@ -710,6 +711,30 @@ const persistProjectPreferences = useCallback(
       }
     },
     [projectId, preferredCli, selectedModel, modelOptions, handleModelChange, loadCliStatuses, persistProjectPreferences, updatePreferredCli, updateSelectedModel]
+  );
+
+  // Handle work_directory change for work mode
+  const handleWorkDirectoryChange = useCallback(
+    async (newDirectory: string) => {
+      if (!projectId || projectMode !== 'work') return;
+
+      setWorkDirectory(newDirectory);
+
+      try {
+        const response = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ work_directory: newDirectory }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to update work_directory');
+        }
+      } catch (error) {
+        console.error('Failed to update work_directory:', error);
+      }
+    },
+    [projectId, projectMode]
   );
 
   useEffect(() => {
@@ -1743,6 +1768,7 @@ const persistProjectPreferences = useCallback(
       const mode = project.mode || 'code';
       setProjectMode(mode); // 设置项目模式
       setWorkDirectory(project.work_directory || ''); // 设置工作目录
+      setProjectPath(project.absolutePath || ''); // 设置项目绝对路径
 
       // work 模式默认显示文件标签和图标视图
       if (mode === 'work') {
@@ -2804,9 +2830,12 @@ const persistProjectPreferences = useCallback(
                 }}
                 onStopTask={handleStopTask}
                 disabled={isRunning}
-                placeholder={mode === 'act' ? "写代码模式..." : "闲聊模式..."}
+                placeholder={projectMode === 'work' ? "工作模式..." : (mode === 'act' ? "写代码模式..." : "闲聊模式...")}
                 mode={mode}
                 onModeChange={setMode}
+                workMode={projectMode}
+                work_directory={workDirectory}
+                onWork_directoryChange={handleWorkDirectoryChange}
                 projectId={projectId}
                 preferredCli={preferredCli}
                 selectedModel={selectedModel}
@@ -2864,6 +2893,9 @@ const persistProjectPreferences = useCallback(
                     placeholder="描述你想要创建的应用..."
                     mode={mode}
                     onModeChange={setMode}
+                    workMode={projectMode}
+                    work_directory={workDirectory}
+                    onWork_directoryChange={handleWorkDirectoryChange}
                     projectId={projectId}
                     preferredCli={preferredCli}
                     selectedModel={selectedModel}

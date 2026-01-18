@@ -4,16 +4,15 @@ import path from 'path';
 import { PROJECTS_DIR_ABSOLUTE } from '@/lib/config/paths';
 
 export function serializeProject(project: ProjectEntity): Project {
-  // 计算项目绝对路径（跨平台兼容）
-  // work 模式使用 work_directory，code 模式使用默认项目目录
-  const mode = (project as any).mode || 'code';
-  const work_directory = (project as any).work_directory;
-  const absolutePath = mode === 'work' && work_directory
-    ? path.normalize(work_directory)
+  // absolutePath is always the project directory (repo_path or computed from id)
+  const absolutePath = project.repoPath
+    ? path.normalize(project.repoPath)
     : path.normalize(path.join(PROJECTS_DIR_ABSOLUTE, project.id));
 
   // 获取项目类型（work 模式可以是 default）
   const projectType = (project as any).projectType;
+  const mode = (project as any).mode || 'code';
+  const work_directory = (project as any).work_directory;
   if (!projectType) {
     throw new Error(`项目 ${project.id} 缺失 projectType 字段`);
   }

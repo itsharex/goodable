@@ -410,7 +410,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    const projectPath = project.repoPath || path.join(process.cwd(), 'projects', project_id);
+    // Determine project working path based on mode
+    // - work mode: use work_directory (where user wants to operate)
+    // - code mode: use repoPath (project directory)
+    const projectMode = (project as any).mode || 'code';
+    const workDirectory = (project as any).work_directory;
+    const projectPath = projectMode === 'work' && workDirectory
+      ? workDirectory
+      : (project.repoPath || path.join(process.cwd(), 'projects', project_id));
 
     const existingSelected = normalizeModelId(project.preferredCli ?? 'claude', project.selectedModel ?? undefined);
 
@@ -432,7 +439,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     // 移除并行启动逻辑以避免竞态条件
 
     // work 模式直接执行，不需要规划阶段
-    const projectMode = (project as any).mode || 'code';
     const needsPlanning = cliPreference === 'claude' && projectMode === 'code' && (project as any).planConfirmed !== true;
 
     if (needsPlanning) {
@@ -469,12 +475,15 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
               ? applyGLMChanges
               : applyClaudeChanges);
 
-      const sessionId =
-        cliPreference === 'claude'
-          ? project.activeClaudeSessionId || undefined
-          : cliPreference === 'cursor'
-          ? project.activeCursorSessionId || undefined
-          : undefined;
+      // work mode: don't resume sessions (each task is independent)
+      // code mode: resume existing session if not initial prompt
+      const sessionId = projectMode === 'work'
+        ? undefined
+        : (cliPreference === 'claude'
+            ? project.activeClaudeSessionId || undefined
+            : cliPreference === 'cursor'
+            ? project.activeCursorSessionId || undefined
+            : undefined);
 
       executor(
         project_id,

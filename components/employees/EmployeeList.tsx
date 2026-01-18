@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { User, Briefcase, Settings } from 'lucide-react';
-import type { Employee, EmployeeCategoryKey } from '@/types/backend/employee';
-import { DEFAULT_EMPLOYEE_CATEGORIES } from '@/types/backend/employee';
+import { useState, useEffect } from 'react';
+import { User, Briefcase, Settings, CheckCircle } from 'lucide-react';
+import type { Employee } from '@/types/backend/employee';
 import EmployeeFormModal from './EmployeeFormModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
@@ -14,7 +13,7 @@ interface EmployeeStats {
 }
 
 interface EmployeeListProps {
-  onAssignWork?: (employee: Employee) => void;
+  onAssignWork?: (employee: Employee, shiftKey?: boolean) => void;
 }
 
 export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
@@ -24,8 +23,6 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [hoveredEmployee, setHoveredEmployee] = useState<Employee | null>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load employees
   const loadEmployees = async () => {
@@ -61,57 +58,6 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
     loadStats();
   }, []);
 
-  // Group employees by category
-  const employeesByCategory = useMemo(() => {
-    const grouped: Record<EmployeeCategoryKey, Employee[]> = {
-      growth: [],
-      research: [],
-      content: [],
-      sales: [],
-      support: [],
-      admin: [],
-      legal: [],
-      engineering: [],
-      other: [],
-    };
-
-    employees.forEach((emp) => {
-      const cat = emp.category as EmployeeCategoryKey;
-      if (grouped[cat]) {
-        grouped[cat].push(emp);
-      } else {
-        grouped.other.push(emp);
-      }
-    });
-
-    return grouped;
-  }, [employees]);
-
-  // Calculate category stats
-  const getCategoryStats = (categoryEmployees: Employee[]) => {
-    let taskCount = 0;
-    let tokenCount = 0;
-    categoryEmployees.forEach((emp) => {
-      const empStats = stats[emp.id];
-      if (empStats) {
-        taskCount += empStats.task_count || 0;
-        tokenCount += empStats.total_tokens || 0;
-      }
-    });
-    return { taskCount, tokenCount };
-  };
-
-  // Format token count
-  const formatTokens = (count: number): string => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}k`;
-    }
-    return String(count);
-  };
-
   // Open create modal
   const handleCreate = () => {
     setEditingEmployee(null);
@@ -121,7 +67,6 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
   // Open edit modal
   const handleEdit = (employee: Employee) => {
     setEditingEmployee(employee);
-    setHoveredEmployee(null);
     setIsModalOpen(true);
   };
 
@@ -135,30 +80,10 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
   };
 
   // Handle assign work
-  const handleAssignWork = (employee: Employee) => {
-    setHoveredEmployee(null);
+  const handleAssignWork = (employee: Employee, shiftKey?: boolean) => {
     if (onAssignWork) {
-      onAssignWork(employee);
+      onAssignWork(employee, shiftKey);
     }
-  };
-
-  // Handle mouse enter - show detail card after delay
-  const handleMouseEnter = (employee: Employee) => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHoveredEmployee(employee);
-    }, 300);
-  };
-
-  // Handle mouse leave - hide detail card
-  const handleMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setHoveredEmployee(null);
   };
 
   return (
@@ -202,110 +127,73 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
           <p className="text-sm text-gray-400 mt-2">点击右上角新建按钮创建员工</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1400px]:grid-cols-4 gap-4 items-start">
-          {DEFAULT_EMPLOYEE_CATEGORIES.map((category) => {
-            const categoryEmployees = employeesByCategory[category.key] || [];
-            if (categoryEmployees.length === 0) return null;
-
-            const categoryStats = getCategoryStats(categoryEmployees);
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+          {employees.map((employee) => {
+            const empStats = stats[employee.id];
+            const taskCount = empStats?.task_count || 0;
 
             return (
-              <div key={category.key} className="bg-gray-50 rounded-xl p-4">
-                {/* Department Header */}
-                <div className="mb-3 pb-2 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-700">
-                    {category.name}
-                    <span className="ml-1 font-normal text-gray-400">（{categoryEmployees.length}人）</span>
-                  </h3>
-                  <div className="text-xs text-gray-400 mt-1">
-                    完成 {categoryStats.taskCount} 任务 · 消耗 {formatTokens(categoryStats.tokenCount)} Token
-                  </div>
+              <div
+                key={employee.id}
+                className="group relative bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow border border-gray-300 overflow-hidden"
+              >
+                {/* Lanyard hole decoration */}
+                <div className="h-2 bg-gradient-to-r from-gray-400 via-gray-500 to-gray-400 flex justify-center">
+                  <div className="w-3 h-1.5 bg-gray-200 rounded-b-full" />
                 </div>
 
-                {/* Employees Grid - 3 per row */}
-                <div className="grid grid-cols-3 gap-2">
-                  {categoryEmployees.map((employee) => {
-                    const isHovered = hoveredEmployee?.id === employee.id;
+                {/* Mode badge - top right */}
+                <div className="absolute top-4 right-2">
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    employee.mode === 'code'
+                      ? 'bg-blue-100 text-blue-600'
+                      : 'bg-green-100 text-green-600'
+                  }`}>
+                    {employee.mode}
+                  </span>
+                </div>
 
-                    return (
-                      <div
-                        key={employee.id}
-                        className="relative"
-                        onMouseEnter={() => handleMouseEnter(employee)}
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        <div className="flex flex-col items-center p-2 rounded-lg hover:bg-white hover:shadow-md transition-all cursor-pointer">
-                          {/* Avatar */}
-                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mb-1">
-                            <User className="w-5 h-5 text-gray-500" />
-                          </div>
+                <div className="p-4 flex flex-col items-center">
+                  {/* Avatar - circle outline only */}
+                  <div className="w-20 h-20 rounded-full border-2 border-gray-300 flex items-center justify-center mb-3">
+                    <User className="w-12 h-12 text-gray-500" />
+                  </div>
 
-                          {/* Name */}
-                          <span className="text-xs text-gray-700 text-center truncate w-full">
-                            {employee.name}
-                          </span>
-                        </div>
+                  {/* Position (use name as position) */}
+                  <div className="font-semibold text-gray-900 text-base text-center">
+                    {employee.name}
+                  </div>
 
-                        {/* Detail Card - shown on hover */}
-                        {isHovered && (
-                          <div className="absolute z-50 top-0 left-1/2 -translate-x-1/2 -translate-y-full mb-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 p-3">
-                            {/* Employee Info */}
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                                <User className="w-4 h-4 text-gray-500" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-900 truncate">
-                                  {employee.name}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  {employee.mode === 'code' ? '编程' : '工作'}模式
-                                </div>
-                              </div>
-                            </div>
+                  {/* Description */}
+                  {employee.description && (
+                    <p className="mt-1.5 text-sm text-gray-600 text-center line-clamp-2 min-h-[2.5rem]">
+                      {employee.description}
+                    </p>
+                  )}
 
-                            {/* Description */}
-                            {employee.description && (
-                              <p className="text-xs text-gray-500 mb-3 line-clamp-2">
-                                {employee.description}
-                              </p>
-                            )}
+                  {/* Task Count */}
+                  <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
+                    <CheckCircle className="w-3 h-3 text-green-500" />
+                    <span>已完成 {taskCount} 任务</span>
+                  </div>
 
-                            {/* Stats */}
-                            {stats[employee.id] && (
-                              <div className="text-xs text-gray-400 mb-3">
-                                完成 {stats[employee.id].task_count} 任务 · {formatTokens(stats[employee.id].total_tokens)} Token
-                              </div>
-                            )}
-
-                            {/* Actions */}
-                            <div className="flex gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAssignWork(employee);
-                                }}
-                                className="flex-1 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
-                              >
-                                <Briefcase className="w-3 h-3" />
-                                派活
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(employee);
-                                }}
-                                className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
-                              >
-                                <Settings className="w-3 h-3" />
-                                设置
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {/* Action Buttons - show on hover */}
+                  <div className="mt-3 flex gap-2 w-full opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => handleAssignWork(employee, e.shiftKey)}
+                      className="flex-1 px-3 py-1.5 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Briefcase className="w-3 h-3" />
+                      派活
+                    </button>
+                    <button
+                      onClick={() => handleEdit(employee)}
+                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                    >
+                      <Settings className="w-3 h-3" />
+                      设置
+                    </button>
+                  </div>
                 </div>
               </div>
             );

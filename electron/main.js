@@ -847,6 +847,21 @@ function registerIpcHandlers() {
     }
   });
 
+  // Open folder in system file manager
+  ipcMain.handle('open-folder', async (event, folderPath) => {
+    if (!folderPath || typeof folderPath !== 'string') {
+      return { success: false, error: 'Invalid folder path' };
+    }
+
+    try {
+      await shell.openPath(folderPath);
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to open folder:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // Set window size (for slim mode)
   ipcMain.handle('set-window-size', async (event, { width, height, minWidth, minHeight } = {}) => {
     const targetWindow = BrowserWindow.fromWebContents(event.sender);
@@ -937,7 +952,10 @@ function registerIpcHandlers() {
         ? process.env.ELECTRON_START_URL || `http://localhost:${process.env.WEB_PORT || '3035'}`
         : productionUrl || 'http://127.0.0.1:3035';
 
-      const workspaceUrl = `${baseUrl}/workspace`;
+      // Support custom URL path from options
+      const targetUrl = options.url
+        ? `${baseUrl}${options.url.startsWith('/') ? options.url : '/' + options.url}`
+        : `${baseUrl}/workspace`;
 
       // 创建新窗口
       const newWindow = new BrowserWindow({
@@ -969,7 +987,7 @@ function registerIpcHandlers() {
         }
       });
 
-      await newWindow.loadURL(workspaceUrl);
+      await newWindow.loadURL(targetUrl);
 
       // fallback: 确保窗口显示
       if (!newWindow.isDestroyed() && !newWindow.isVisible()) {
@@ -995,6 +1013,67 @@ function registerIpcHandlers() {
         success: false,
         message: '创建新窗口失败: ' + (error.message || '未知错误')
       };
+    }
+  });
+
+  // Arrange slim windows in a 2x4 grid
+  ipcMain.handle('arrange-slim-windows', async () => {
+    try {
+      const { screen } = require('electron');
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+      // Get all windows sorted by webContents.id (creation order)
+      const allWindows = BrowserWindow.getAllWindows()
+        .filter(win => !win.isDestroyed())
+        .sort((a, b) => a.webContents.id - b.webContents.id);
+
+      // Filter slim windows (width <= 500)
+      const slimWindows = allWindows.filter(win => {
+        const [w] = win.getSize();
+        return w <= 500;
+      });
+
+      if (slimWindows.length === 0) {
+        return { success: true, arranged: 0 };
+      }
+
+      // Grid layout: 2 rows x 4 cols, max 8 windows
+      const cols = 4;
+      const rows = 2;
+      const maxWindows = cols * rows;
+      const windowsToArrange = slimWindows.slice(0, maxWindows);
+
+      // Layout settings
+      const startX = 90;           // Start 90px from left edge
+      const gapX = 15;             // Horizontal gap between windows
+      const gapY = 60;             // Vertical gap between rows
+
+      // Calculate window size (account for gaps)
+      const availableWidth = screenWidth - startX - (cols - 1) * gapX;
+      const availableHeight = screenHeight - (rows - 1) * gapY;
+      const windowWidth = Math.floor(availableWidth / cols);
+      const windowHeight = Math.floor(availableHeight / rows);
+
+      // Arrange windows from left side of screen
+      windowsToArrange.forEach((win, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = startX + col * (windowWidth + gapX);
+        const y = row * (windowHeight + gapY);
+
+        win.setBounds({
+          x,
+          y,
+          width: windowWidth,
+          height: windowHeight
+        });
+      });
+
+      return { success: true, arranged: windowsToArrange.length };
+    } catch (error) {
+      console.error('Failed to arrange slim windows:', error);
+      return { success: false, error: error.message };
     }
   });
 }

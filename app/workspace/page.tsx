@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppSidebar from '@/components/layout/AppSidebar';
 import ChatInput from '@/components/chat/ChatInput';
@@ -52,6 +52,8 @@ function WorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewParam = searchParams?.get('view') as 'home' | 'templates' | 'apps' | 'employees' | 'skills' | 'help' | null;
+  const employeeIdParam = searchParams?.get('employee_id');
+  const autoSendParam = searchParams?.get('auto_send') === 'true';
   const [currentView, setCurrentView] = useState<'home' | 'templates' | 'apps' | 'employees' | 'skills' | 'help'>(viewParam || 'home');
   const [projects, setProjects] = useState<any[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -60,7 +62,6 @@ function WorkspaceContent() {
   const [thinkingMode, setThinkingMode] = useState(false);
   const [projectType, setProjectType] = useState<'nextjs' | 'python-fastapi'>('python-fastapi');
   const [workMode, setWorkMode] = useState<'code' | 'work'>('code');
-  const [work_directory, setWork_directory] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
   const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -76,6 +77,10 @@ function WorkspaceContent() {
   // Employee state
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  // Cache input content per employee
+  const employeeInputCacheRef = useRef<Record<string, string>>({});
+  // Current input message (synced with ChatInput via inputControl)
+  const currentInputRef = useRef<string>('');
 
   // Load employees for display
   const loadEmployees = useCallback(async () => {
@@ -102,12 +107,26 @@ function WorkspaceContent() {
     loadEmployees();
   }, [loadEmployees]);
 
-  // Handle employee selection
+  // Handle employee selection - with input cache
   const handleEmployeeSelect = (employee: Employee) => {
+    // Save current input for previous employee
+    if (selectedEmployeeId && currentInputRef.current) {
+      employeeInputCacheRef.current[selectedEmployeeId] = currentInputRef.current;
+    }
+
     setSelectedEmployeeId(employee.id);
     localStorage.setItem('selected_employee_id', employee.id);
     // Auto switch workMode based on employee mode
     setWorkMode(employee.mode);
+
+    // Restore cached input or use first_prompt
+    const cachedInput = employeeInputCacheRef.current[employee.id];
+    const inputToSet = cachedInput ?? employee.first_prompt ?? '';
+
+    if (inputControl) {
+      inputControl.setMessage(inputToSet);
+      currentInputRef.current = inputToSet;
+    }
   };
 
   // Sync workMode with selected employee's mode after employees loaded
@@ -322,45 +341,24 @@ function WorkspaceContent() {
     }
   }, [globalSettings]);
 
-  // Handle tip card click - fill input and open directory selector
-  const handleTipCardClick = useCallback(async (title: string) => {
-    // Fill the input with the tip title
+  // Handle tip card click - fill input with tip title
+  const handleTipCardClick = useCallback((title: string) => {
     if (inputControl) {
       inputControl.setMessage(title);
-    }
-
-    // Open directory selector
-    if (typeof window !== 'undefined' && (window as any).desktopAPI?.selectDirectory) {
-      try {
-        const result = await (window as any).desktopAPI.selectDirectory();
-        if (result?.success && result?.path) {
-          setWork_directory(result.path);
-        }
-      } catch (error) {
-        console.error('Error selecting directory:', error);
-      }
-    } else {
-      alert('请使用桌面客户端选择目录');
+      inputControl.focus();
     }
   }, [inputControl]);
 
   // Create project and navigate
-  const handleCreateProject = async (message: string, images?: any[]): Promise<boolean> => {
+  // employeeId param allows overriding selectedEmployeeId (fixes async state update issue)
+  const handleCreateProject = useCallback(async (message: string, images?: any[], employeeId?: string): Promise<boolean> => {
     if (isCreating) return false;
-
-    // work 模式需要选择目录
-    if (workMode === 'work' && !work_directory) {
-      alert('请先选择工作目录');
-      return false;
-    }
 
     setIsCreating(true);
 
     try {
-      // Generate project ID
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(2, 15);
-      const projectId = `project-${timestamp}-${randomStr}`;
+      // Generate short project ID (8 chars)
+      const projectId = `p-${Math.random().toString(36).substring(2, 10)}`;
 
       const response = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
@@ -374,8 +372,7 @@ function WorkspaceContent() {
           selectedModel,
           projectType,
           mode: workMode,
-          work_directory: workMode === 'work' ? work_directory : undefined,
-          employee_id: selectedEmployeeId || undefined,
+          employee_id: employeeId ?? selectedEmployeeId ?? undefined,
         })
       });
 
@@ -408,7 +405,30 @@ function WorkspaceContent() {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [isCreating, preferredCli, selectedModel, projectType, workMode, selectedEmployeeId, router]);
+
+  // Handle auto_send from URL params (for shift+派活 new window)
+  const autoSendTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoSendTriggeredRef.current) return;
+    if (!autoSendParam || !employeeIdParam || employees.length === 0) return;
+
+    const employee = employees.find(e => e.id === employeeIdParam);
+    if (!employee) return;
+
+    // Mark as triggered to prevent re-execution
+    autoSendTriggeredRef.current = true;
+
+    // Set employee and mode
+    setSelectedEmployeeId(employee.id);
+    localStorage.setItem('selected_employee_id', employee.id);
+    setWorkMode(employee.mode);
+
+    // Auto send first_prompt if exists
+    if (employee.first_prompt) {
+      handleCreateProject(employee.first_prompt, undefined, employee.id);
+    }
+  }, [autoSendParam, employeeIdParam, employees, handleCreateProject]);
 
   const handleModelChange = (option: any) => {
     if (option && typeof option.id === 'string') {
@@ -579,8 +599,6 @@ function WorkspaceContent() {
                 mode="act"
                 workMode={workMode}
                 onWorkModeChange={setWorkMode}
-                work_directory={work_directory}
-                onWork_directoryChange={setWork_directory}
                 preferredCli={preferredCli}
                 selectedModel={selectedModel}
                 thinkingMode={thinkingMode}
@@ -592,6 +610,7 @@ function WorkspaceContent() {
                 projectType={projectType}
                 onProjectTypeChange={setProjectType}
                 onExposeInputControl={setInputControl}
+                onInputChange={(value) => { currentInputRef.current = value; }}
               />
 
               {/* Quick Action Chips - only show in code mode */}
@@ -1228,11 +1247,35 @@ function WorkspaceContent() {
         {/* Employees View */}
         {currentView === 'employees' && (
           <EmployeeList
-            onAssignWork={(employee) => {
+            onAssignWork={async (employee, shiftKey) => {
+              // Shift+click: open in new slim window
+              if (shiftKey && typeof window !== 'undefined' && (window as any).desktopAPI) {
+                try {
+                  const result = await (window as any).desktopAPI.openNewWindow({
+                    slimMode: true,
+                    url: `/workspace?view=home&employee_id=${employee.id}&auto_send=true`
+                  });
+                  if (!result?.success) {
+                    console.error('Failed to open new window:', result?.error);
+                  }
+                } catch (error) {
+                  console.error('Failed to open new window:', error);
+                }
+                return;
+              }
+
+              // Normal click: handle in current window
               setSelectedEmployeeId(employee.id);
               localStorage.setItem('selected_employee_id', employee.id);
               setWorkMode(employee.mode);
-              setCurrentView('home');
+
+              // If employee has first_prompt, create project and send directly
+              if (employee.first_prompt) {
+                await handleCreateProject(employee.first_prompt, undefined, employee.id);
+              } else {
+                // No first_prompt, go to home page
+                setCurrentView('home');
+              }
             }}
           />
         )}

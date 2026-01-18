@@ -34,7 +34,43 @@ interface EmployeesData {
 let cachedCategories: EmployeeCategoryConfig[] | null = null;
 
 /**
- * Load builtin employees data (read-only)
+ * Builtin employee overrides storage path
+ */
+function getBuiltinOverridesPath(): string {
+  const userPath = getUserEmployeesPath();
+  return userPath.replace('user-employees.json', 'builtin-overrides.json');
+}
+
+/**
+ * Load builtin employee overrides
+ */
+async function loadBuiltinOverrides(): Promise<Record<string, Partial<Employee>>> {
+  const filePath = getBuiltinOverridesPath();
+  try {
+    if (!fsSync.existsSync(filePath)) {
+      return {};
+    }
+    const content = await fs.readFile(filePath, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save builtin employee overrides
+ */
+async function saveBuiltinOverrides(overrides: Record<string, Partial<Employee>>): Promise<void> {
+  const filePath = getBuiltinOverridesPath();
+  const dir = path.dirname(filePath);
+  if (!fsSync.existsSync(dir)) {
+    await fs.mkdir(dir, { recursive: true });
+  }
+  await fs.writeFile(filePath, JSON.stringify(overrides, null, 2), 'utf-8');
+}
+
+/**
+ * Load builtin employees data (read-only base + user overrides)
  */
 async function loadBuiltinEmployeesData(): Promise<EmployeesData> {
   try {
@@ -42,9 +78,20 @@ async function loadBuiltinEmployeesData(): Promise<EmployeesData> {
     const data = JSON.parse(content) as EmployeesData;
     // Cache categories from builtin
     cachedCategories = data.categories || [];
+
+    // Load user overrides for builtin employees
+    const overrides = await loadBuiltinOverrides();
+
+    // Merge overrides into builtin employees
+    const employees = (data.employees || []).map(e => ({
+      ...e,
+      ...overrides[e.id],
+      is_builtin: true,
+    }));
+
     return {
       categories: data.categories || [],
-      employees: (data.employees || []).map(e => ({ ...e, is_builtin: true })),
+      employees,
     };
   } catch (error) {
     console.error('[EmployeeService] Error loading builtin employees:', error);
@@ -127,6 +174,7 @@ export async function createEmployee(
     description: input.description,
     category: input.category,
     mode: input.mode,
+    first_prompt: input.first_prompt,
     system_prompt: input.system_prompt,
     system_prompt_plan: input.system_prompt_plan,
     system_prompt_execution: input.system_prompt_execution,
@@ -143,8 +191,8 @@ export async function createEmployee(
 
 /**
  * Update employee
- * - Builtin employees: cannot be modified
- * - User employees: can be modified
+ * - Builtin employees: can only modify prompts (stored as overrides)
+ * - User employees: can be fully modified
  */
 export async function updateEmployee(
   id: string,
@@ -152,10 +200,26 @@ export async function updateEmployee(
 ): Promise<Employee | null> {
   // Check if it's a builtin employee
   const builtinData = await loadBuiltinEmployeesData();
-  const isBuiltin = builtinData.employees.some(e => e.id === id);
+  const builtinEmployee = builtinData.employees.find(e => e.id === id);
 
-  if (isBuiltin) {
-    throw new Error('Cannot modify builtin employee');
+  if (builtinEmployee) {
+    // Builtin employees: only allow prompt overrides
+    const overrides = await loadBuiltinOverrides();
+    overrides[id] = {
+      ...overrides[id],
+      first_prompt: input.first_prompt ?? overrides[id]?.first_prompt,
+      system_prompt: input.system_prompt ?? overrides[id]?.system_prompt,
+      system_prompt_plan: input.system_prompt_plan ?? overrides[id]?.system_prompt_plan,
+      system_prompt_execution: input.system_prompt_execution ?? overrides[id]?.system_prompt_execution,
+    };
+    await saveBuiltinOverrides(overrides);
+
+    // Return merged employee
+    return {
+      ...builtinEmployee,
+      ...overrides[id],
+      updated_at: new Date().toISOString(),
+    };
   }
 
   // Update in user employees
@@ -173,6 +237,7 @@ export async function updateEmployee(
     description: input.description ?? existing.description,
     category: input.category ?? existing.category,
     mode: input.mode ?? existing.mode,
+    first_prompt: input.first_prompt ?? existing.first_prompt,
     system_prompt: input.system_prompt ?? existing.system_prompt,
     system_prompt_plan: input.system_prompt_plan ?? existing.system_prompt_plan,
     system_prompt_execution:

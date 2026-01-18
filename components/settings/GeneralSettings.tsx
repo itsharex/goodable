@@ -30,10 +30,11 @@ export function GeneralSettings({
   const [isExporting, setIsExporting] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [absolutePath, setAbsolutePath] = useState<string>('');
+  const [workDirectory, setWorkDirectory] = useState<string>('');
   const [projectMode, setProjectMode] = useState<string>('');
   const [projectType, setProjectType] = useState<string>('');
 
-  // 获取项目完整数据（包括绝对路径、模式、类型）
+  // Fetch project data (including absolute path, mode, type, work_directory)
   useEffect(() => {
     if (!projectId || projectId === 'global-settings') return;
 
@@ -45,6 +46,7 @@ export function GeneralSettings({
           setAbsolutePath(data?.data?.absolutePath || '');
           setProjectMode(data?.data?.mode || 'code');
           setProjectType(data?.data?.projectType || '');
+          setWorkDirectory(data?.data?.work_directory || '');
         }
       } catch (error) {
         console.error('Failed to fetch project path:', error);
@@ -305,26 +307,97 @@ export function GeneralSettings({
                   title={absolutePath}
                 />
                 {absolutePath && (
-                  <button
-                    onClick={async () => {
-                      const ok = await copyTextSafe(absolutePath);
-                      setStatus(
-                        ok
-                          ? { type: 'success', text: '路径已复制' }
-                          : { type: 'error', text: '复制失败' }
-                      );
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                    title="复制路径"
-                  >
-                    复制
-                  </button>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-gray-50 pl-2">
+                    <button
+                      onClick={async () => {
+                        if (typeof window !== 'undefined' && (window as any).desktopAPI?.openFolder) {
+                          try {
+                            await (window as any).desktopAPI.openFolder(absolutePath);
+                          } catch (error) {
+                            console.error('Failed to open folder:', error);
+                            setStatus({ type: 'error', text: '打开失败' });
+                          }
+                        }
+                      }}
+                      className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                      title="在资源管理器中打开"
+                    >
+                      打开
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const ok = await copyTextSafe(absolutePath);
+                        setStatus(
+                          ok
+                            ? { type: 'success', text: '路径已复制' }
+                            : { type: 'error', text: '复制失败' }
+                        );
+                      }}
+                      className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                      title="复制路径"
+                    >
+                      复制
+                    </button>
+                  </div>
                 )}
               </div>
               <p className="mt-1 text-xs text-gray-500">
-                所有文件操作将限制在此目录内
+                系统分配的项目目录
               </p>
             </div>
+
+            {/* Work mode: show work directory */}
+            {projectMode === 'work' && (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">工作区目录</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={workDirectory}
+                    disabled
+                    className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500 font-mono text-xs"
+                    title={workDirectory}
+                  />
+                  {workDirectory && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-gray-50 pl-2">
+                      <button
+                        onClick={async () => {
+                          if (typeof window !== 'undefined' && (window as any).desktopAPI?.openFolder) {
+                            try {
+                              await (window as any).desktopAPI.openFolder(workDirectory);
+                            } catch (error) {
+                              console.error('Failed to open folder:', error);
+                              setStatus({ type: 'error', text: '打开失败' });
+                            }
+                          }
+                        }}
+                        className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                        title="在资源管理器中打开"
+                      >
+                        打开
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const ok = await copyTextSafe(workDirectory);
+                          setStatus(
+                            ok
+                              ? { type: 'success', text: '路径已复制' }
+                              : { type: 'error', text: '复制失败' }
+                          );
+                        }}
+                        className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                        title="复制路径"
+                      >
+                        复制
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  所有文件操作将在此目录内进行
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">项目描述</label>

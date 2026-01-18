@@ -68,6 +68,7 @@ export interface UpdateProjectInput {
   repoPath?: string | null;
   planConfirmed?: boolean;
   dependenciesInstalled?: boolean;
+  work_directory?: string;
 }
 
 export interface ProjectSettings {

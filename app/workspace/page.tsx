@@ -545,14 +545,21 @@ function WorkspaceContent() {
                 onSelect={handleEmployeeSelect}
               />
             </div>
-            {/* Top Right - Promotion Banner */}
-            <div className="absolute top-4 right-8 z-10">
+            {/* Top Right - Promotion Banner - hidden when window width < 600px */}
+            <div className="absolute top-4 right-8 z-10 promo-banner-responsive">
               <button
                 onClick={() => window.open('/settings', '_blank')}
                 className="text-xs px-2 py-1 bg-orange-50 text-orange-600 hover:bg-orange-100 rounded-md transition-colors cursor-pointer"
               >
                 💰 限时福利：注册送7元算力 →
               </button>
+              <style jsx>{`
+                @media (max-width: 599px) {
+                  .promo-banner-responsive {
+                    display: none;
+                  }
+                }
+              `}</style>
             </div>
 
             <div className="w-full max-w-4xl px-4 sm:px-8 mt-24">

@@ -283,4 +283,9 @@
     width: 0 !important;
     overflow: hidden !important;
   }
+
+  /* Hide home page suggestions area in slim mode */
+  .home-suggestions-area {
+    display: none !important;
+  }
 }

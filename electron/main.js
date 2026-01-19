@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -576,6 +576,13 @@ async function createMainWindow() {
     };
   });
 
+  // Setup context menu for secondary windows opened via window.open()
+  mainWindow.webContents.on('did-create-window', (childWindow) => {
+    setupContextMenu(childWindow);
+    registerWindowStateEvents(childWindow);
+    registerNavigationEvents(childWindow);
+  });
+
   mainWindow.webContents.once('did-finish-load', () => {
     if (mainWindow && !mainWindow.isVisible()) {
       console.log('🪟 Main window did-finish-load – displaying window.');
@@ -612,11 +619,51 @@ async function createMainWindow() {
   registerWindowStateEvents(mainWindow);
   registerNavigationEvents(mainWindow);
 
+  // 设置右键菜单
+  setupContextMenu(mainWindow);
+
   // 设置崩溃监控
   crashMonitor.setupRendererCrashMonitoring(mainWindow, createMainWindow);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+  });
+}
+
+// ==================== 右键菜单 ====================
+
+function setupContextMenu(window) {
+  if (!window || !window.webContents) {
+    return;
+  }
+
+  window.webContents.on('context-menu', (event, params) => {
+    const menuItems = [];
+
+    // Text editing actions
+    if (params.isEditable) {
+      menuItems.push(
+        { label: '撤销', role: 'undo', enabled: params.editFlags.canUndo },
+        { label: '重做', role: 'redo', enabled: params.editFlags.canRedo },
+        { type: 'separator' },
+        { label: '剪切', role: 'cut', enabled: params.editFlags.canCut },
+        { label: '复制', role: 'copy', enabled: params.editFlags.canCopy },
+        { label: '粘贴', role: 'paste', enabled: params.editFlags.canPaste },
+        { type: 'separator' },
+        { label: '全选', role: 'selectAll', enabled: params.editFlags.canSelectAll }
+      );
+    } else if (params.selectionText) {
+      // Text selection (non-editable)
+      menuItems.push(
+        { label: '复制', role: 'copy', enabled: params.editFlags.canCopy }
+      );
+    }
+
+    // Only show menu if there are items
+    if (menuItems.length > 0) {
+      const menu = Menu.buildFromTemplate(menuItems);
+      menu.popup({ window });
+    }
   });
 }
 
@@ -997,6 +1044,9 @@ function registerIpcHandlers() {
       // 注册窗口状态和导航事件
       registerWindowStateEvents(newWindow);
       registerNavigationEvents(newWindow);
+
+      // 设置右键菜单
+      setupContextMenu(newWindow);
 
       // 设置崩溃监控
       crashMonitor.setupRendererCrashMonitoring(newWindow, null);

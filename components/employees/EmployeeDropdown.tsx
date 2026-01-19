@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, User } from 'lucide-react';
 import type { Employee } from '@/types/backend/employee';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
@@ -65,6 +65,7 @@ export default function EmployeeDropdown({
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1.5 px-2 py-1 hover:bg-gray-100 rounded transition-colors text-sm"
       >
+        <User className="w-4 h-4 text-gray-400" />
         <span className="text-gray-600">
           {selectedEmployee?.name || '选择员工'}
         </span>
@@ -85,19 +86,22 @@ export default function EmployeeDropdown({
                 }}
                 className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 truncate">
-                      {employee.name}
-                    </span>
-                    {employee.is_builtin && (
-                      <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
-                        内置
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <User className="w-8 h-8 text-gray-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900 truncate">
+                        {employee.name}
                       </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {employee.category} · {employee.mode === 'code' ? '编程' : '工作'}
+                      {employee.is_builtin && (
+                        <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                          内置
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {employee.category} · {employee.mode === 'code' ? '编程' : '工作'}
+                    </div>
                   </div>
                 </div>
                 {selectedEmployeeId === employee.id && (

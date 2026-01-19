@@ -2829,7 +2829,6 @@ const persistProjectPreferences = useCallback(
                   return await runAct(message, images);
                 }}
                 onStopTask={handleStopTask}
-                disabled={isRunning}
                 placeholder={projectMode === 'work' ? "工作模式..." : (mode === 'act' ? "写代码模式..." : "闲聊模式...")}
                 mode={mode}
                 onModeChange={setMode}
@@ -2889,7 +2888,6 @@ const persistProjectPreferences = useCallback(
                       }
                       return success;
                     }}
-                    disabled={isRunning}
                     placeholder="描述你想要创建的应用..."
                     mode={mode}
                     onModeChange={setMode}

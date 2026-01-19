@@ -601,7 +601,7 @@ function WorkspaceContent() {
 
               {/* Quick Action Chips - only show in code mode */}
               {workMode === 'code' && (
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 home-suggestions-area">
                   <button
                     onClick={() => handleCreateProject("做一个万能短视频下载工具")}
                     className="px-2 sm:px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:border-gray-300 hover:text-gray-700 transition-colors text-xs"
@@ -626,7 +626,7 @@ function WorkspaceContent() {
 
             {/* Tab Switcher - Different for code vs work mode */}
             {workMode === 'code' ? (
-              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto">
+              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto home-suggestions-area">
                 {[
                   { key: 'templates' as const, label: '模板市场', showCount: false },
                   { key: 'deployed' as const, label: '已部署到阿里云', showCount: true, count: projects.filter((p: any) => p.deployedUrl !== undefined && p.deployedUrl !== null && p.mode !== 'work').length },
@@ -649,7 +649,7 @@ function WorkspaceContent() {
                 })}
               </div>
             ) : (
-              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto">
+              <div className="w-full max-w-5xl px-4 sm:px-8 mt-12 flex items-center justify-start gap-3 sm:gap-6 border-b border-gray-200 overflow-x-auto home-suggestions-area">
                 {[
                   { key: 'tips' as const, label: '使用提醒' },
                   { key: 'recent' as const, label: '最近操作', count: projects.filter((p: any) => p.mode === 'work').length },
@@ -673,7 +673,7 @@ function WorkspaceContent() {
             )}
 
             {/* Card Display Area */}
-            <div className="w-full max-w-5xl px-4 sm:px-8 mt-4 pb-8">
+            <div className="w-full max-w-5xl px-4 sm:px-8 mt-4 pb-8 home-suggestions-area">
               {/* Code Mode Content */}
               {workMode === 'code' && (
                 <>

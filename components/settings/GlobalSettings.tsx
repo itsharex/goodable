@@ -107,7 +107,7 @@ interface ServiceToken {
 }
 
 export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agents', embedded = false }: GlobalSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'ai-agents' | 'services' | 'prompts'>(initialTab === 'general' ? 'ai-agents' : (initialTab as 'ai-agents' | 'services' | 'prompts'));
+  const [activeTab, setActiveTab] = useState<'general' | 'ai-agents' | 'services'>(initialTab === 'general' ? 'ai-agents' : (initialTab as 'ai-agents' | 'services'));
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<'github' | 'supabase' | 'vercel' | null>(null);
   const [tokens, setTokens] = useState<{ [key: string]: ServiceToken | null }>({
@@ -132,15 +132,6 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
   const [apiKeyVisibility, setApiKeyVisibility] = useState<Record<string, boolean>>({});
   const [apiTestState, setApiTestState] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
   const [apiTestMessage, setApiTestMessage] = useState<Record<string, string>>({});
-
-  // Prompts state
-  const [prompts, setPrompts] = useState<Record<string, string>>({});
-  const [promptsDefaults, setPromptsDefaults] = useState<Record<string, string>>({});
-  const [promptsMetadata, setPromptsMetadata] = useState<Record<string, { label: string; description: string }>>({});
-  const [promptsLoading, setPromptsLoading] = useState(false);
-  const [promptsSaving, setPromptsSaving] = useState(false);
-  const [promptsMessage, setPromptsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [activePromptKey, setActivePromptKey] = useState<string>('nextjs-execution');
 
   // Show toast function
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -240,83 +231,6 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
     }
   }, [setGlobalSettings]);
 
-  // Load prompts
-  const loadPrompts = useCallback(async () => {
-    setPromptsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/settings/prompts`);
-      if (response.ok) {
-        const data = await response.json();
-        setPrompts(data.prompts || {});
-        setPromptsDefaults(data.defaults || {});
-        setPromptsMetadata(data.metadata || {});
-      }
-    } catch (error) {
-      console.error('Failed to load prompts:', error);
-    } finally {
-      setPromptsLoading(false);
-    }
-  }, []);
-
-  // Save prompts
-  const savePrompts = async () => {
-    setPromptsSaving(true);
-    setPromptsMessage(null);
-    try {
-      const response = await fetch(`${API_BASE}/api/settings/prompts`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompts }),
-      });
-      if (response.ok) {
-        setPromptsMessage({ type: 'success', text: '提示词保存成功' });
-      } else {
-        throw new Error('Failed to save prompts');
-      }
-    } catch (error) {
-      setPromptsMessage({ type: 'error', text: '保存失败，请重试' });
-    } finally {
-      setPromptsSaving(false);
-      setTimeout(() => setPromptsMessage(null), 3000);
-    }
-  };
-
-  // Reset single prompt
-  const resetPrompt = async (key: string) => {
-    if (!confirm(`确定要重置 "${promptsMetadata[key]?.label || key}" 为默认值吗？`)) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/settings/prompts?key=${key}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPrompts(data.prompts || {});
-        setPromptsMessage({ type: 'success', text: '已重置为默认值' });
-      }
-    } catch (error) {
-      setPromptsMessage({ type: 'error', text: '重置失败' });
-    }
-    setTimeout(() => setPromptsMessage(null), 3000);
-  };
-
-  // Reset all prompts
-  const resetAllPrompts = async () => {
-    if (!confirm('确定要重置所有提示词为默认值吗？')) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/settings/prompts`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPrompts(data.prompts || {});
-        setPromptsMessage({ type: 'success', text: '所有提示词已重置为默认值' });
-      }
-    } catch (error) {
-      setPromptsMessage({ type: 'error', text: '重置失败' });
-    }
-    setTimeout(() => setPromptsMessage(null), 3000);
-  };
-
   const checkCLIStatus = useCallback(async () => {
     const checkingStatus: CLIStatus = CLI_OPTIONS.reduce((acc, cli) => {
       acc[cli.id] = { installed: true, checking: true };
@@ -339,9 +253,8 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
       loadAllTokens();
       loadGlobalSettings();
       checkCLIStatus();
-      loadPrompts();
     }
-  }, [isOpen, loadAllTokens, loadGlobalSettings, checkCLIStatus, loadPrompts]);
+  }, [isOpen, loadAllTokens, loadGlobalSettings, checkCLIStatus]);
 
   const saveGlobalSettings = async () => {
     setIsLoading(true);
@@ -711,7 +624,6 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
             <nav className="flex px-5">
               {[
                 { id: 'ai-agents' as const, label: 'LLM API' },
-                { id: 'prompts' as const, label: '提示词' },
                 { id: 'services' as const, label: 'Services' }
               ].map(tab => (
                 <button
@@ -1080,91 +992,6 @@ export default function GlobalSettings({ isOpen, onClose, initialTab = 'ai-agent
                   })}
                   
                 </div>
-              </div>
-            )}
-
-            {activeTab === 'prompts' && (
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">系统提示词配置</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      自定义 AI 在不同阶段的行为规范，修改后立即生效
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {promptsMessage && (
-                      <span className={`text-sm ${promptsMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                        {promptsMessage.text}
-                      </span>
-                    )}
-                    <button
-                      onClick={resetAllPrompts}
-                      className="px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg bg-white hover:bg-gray-50 text-gray-600 transition-colors"
-                    >
-                      重置全部
-                    </button>
-                    <button
-                      onClick={savePrompts}
-                      disabled={promptsSaving}
-                      className="px-4 py-1.5 text-xs font-medium bg-gray-900 hover:bg-gray-800 text-white rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {promptsSaving ? '保存中...' : '保存'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Prompt Tabs */}
-                <div className="flex gap-2 border-b border-gray-200 pb-2">
-                  {['nextjs-execution', 'nextjs-planning', 'python-execution', 'python-planning', 'work-mode'].map(key => (
-                    <button
-                      key={key}
-                      onClick={() => setActivePromptKey(key)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                        activePromptKey === key
-                          ? 'bg-gray-900 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {promptsMetadata[key]?.label || key}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Active Prompt Editor */}
-                {promptsLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-gray-500">加载中...</div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900">{promptsMetadata[activePromptKey]?.label}</h4>
-                        <p className="text-xs text-gray-500 mt-0.5">{promptsMetadata[activePromptKey]?.description}</p>
-                      </div>
-                      <button
-                        onClick={() => resetPrompt(activePromptKey)}
-                        className="text-xs text-gray-500 hover:text-gray-700"
-                      >
-                        重置此项
-                      </button>
-                    </div>
-                    <textarea
-                      value={prompts[activePromptKey] || ''}
-                      onChange={(e) => setPrompts(prev => ({ ...prev, [activePromptKey]: e.target.value }))}
-                      placeholder={promptsDefaults[activePromptKey] || ''}
-                      className="w-full h-[400px] px-4 py-3 border border-gray-200 rounded-lg bg-white text-sm text-gray-700 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-gray-200"
-                    />
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>字符数: {(prompts[activePromptKey] || '').length}</span>
-                      <span>
-                        {prompts[activePromptKey] !== promptsDefaults[activePromptKey] ? '已修改' : '默认值'}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 

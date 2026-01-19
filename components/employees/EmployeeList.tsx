@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { User, Briefcase, Settings, CheckCircle } from 'lucide-react';
+import { User, CheckCircle } from 'lucide-react';
 import type { Employee } from '@/types/backend/employee';
 import EmployeeFormModal from './EmployeeFormModal';
 
@@ -181,16 +181,14 @@ export default function EmployeeList({ onAssignWork }: EmployeeListProps) {
                   <div className="mt-3 flex gap-2 w-full opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => handleAssignWork(employee, e.shiftKey)}
-                      className="flex-1 px-3 py-1.5 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-1"
+                      className="flex-1 px-3 py-1.5 bg-gray-700 text-white text-xs font-medium rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center"
                     >
-                      <Briefcase className="w-3 h-3" />
                       派活
                     </button>
                     <button
                       onClick={() => handleEdit(employee)}
-                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                      className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center"
                     >
-                      <Settings className="w-3 h-3" />
                       设置
                     </button>
                   </div>

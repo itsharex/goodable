@@ -41,6 +41,7 @@ interface Template {
 
 interface SkillMeta {
   name: string;
+  displayName?: string;
   description: string;
   path: string;
   source: 'builtin' | 'user';
@@ -1325,7 +1326,7 @@ function WorkspaceContent() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-gray-900 text-sm">{skill.name}</h4>
+                          <h4 className="font-medium text-gray-900 text-sm">{skill.displayName || skill.name}</h4>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             skill.source === 'builtin'
                               ? 'bg-blue-100 text-blue-700'

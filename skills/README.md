@@ -21,6 +21,7 @@ Required frontmatter fields:
 ```yaml
 ---
 name: skill-name        # Must match directory name
+displayName: 技能中文名  # Optional: display name for UI (Chinese recommended)
 description: "..."      # Brief description for AI to decide when to use
 ---
 

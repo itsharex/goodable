@@ -14,6 +14,7 @@ import {
 
 export interface SkillMeta {
   name: string;
+  displayName?: string;
   description: string;
   path: string;
   source: 'builtin' | 'user';
@@ -136,7 +137,7 @@ async function getDirSize(dirPath: string): Promise<number> {
 /**
  * Parse SKILL.md frontmatter
  */
-async function parseSkillMd(skillPath: string): Promise<{ name: string; description: string } | null> {
+async function parseSkillMd(skillPath: string): Promise<{ name: string; displayName?: string; description: string } | null> {
   const skillMdPath = path.join(skillPath, 'SKILL.md');
   try {
     const content = await fs.readFile(skillMdPath, 'utf-8');
@@ -144,6 +145,7 @@ async function parseSkillMd(skillPath: string): Promise<{ name: string; descript
     if (data.name && data.description) {
       return {
         name: String(data.name),
+        displayName: data.displayName ? String(data.displayName) : undefined,
         description: String(data.description),
       };
     }
@@ -178,6 +180,7 @@ async function scanSkillsFromDir(
         const size = await getDirSize(skillPath);
         skills.push({
           name: parsed.name,
+          displayName: parsed.displayName,
           description: parsed.description,
           path: skillPath,
           source,

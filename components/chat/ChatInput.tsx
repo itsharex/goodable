@@ -1,17 +1,34 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { ArrowUp, MessageSquare, Image as ImageIcon, Wrench, Square, Shield } from 'lucide-react';
+import { ArrowUp, MessageSquare, Image as ImageIcon, Wrench, Square, Lock, AlertTriangle, Folder } from 'lucide-react';
 import SlashCommandMenu from './SlashCommandMenu';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
 type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 
-const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; description: string }[] = [
-  { value: 'default', label: '默认模式', description: '只读自动放行' },
-  { value: 'acceptEdits', label: '接受编辑', description: '编辑自动放行' },
-  { value: 'bypassPermissions', label: '全放行', description: '所有操作放行' },
+const PERMISSION_MODE_OPTIONS: { value: PermissionMode; label: string; shortLabel: string; description: string; hint?: string; warning?: string }[] = [
+  {
+    value: 'default',
+    label: '只读放行',
+    shortLabel: '只读',
+    description: '仅 Read、Glob、Grep、WebFetch、WebSearch 等只读工具自动放行，其他操作需要手动确认',
+    hint: '推荐：如果不确定选什么，或数据很重要，请使用此模式'
+  },
+  {
+    value: 'acceptEdits',
+    label: '允许编辑',
+    shortLabel: '编辑',
+    description: '在只读基础上，Write、Edit、NotebookEdit 等文件编辑也自动放行'
+  },
+  {
+    value: 'bypassPermissions',
+    label: '全放行',
+    shortLabel: '全放行',
+    description: '所有工具自动放行，无需任何确认',
+    warning: '危险模式：可能执行任意操作，请谨慎使用'
+  },
 ];
 
 interface UploadedImage {
@@ -109,6 +126,7 @@ export default function ChatInput({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPermissionMenu, setShowPermissionMenu] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const submissionLockRef = useRef(false);
@@ -519,17 +537,17 @@ export default function ChatInput({
 
           {/* Bottom Toolbar - Inside textarea, clean design */}
           <div className="absolute bottom-5 left-6 right-6 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-3">
               {/* Image Upload Button - show on task page for both code and work modes */}
               {projectId && supportsImageUpload && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-full transition-colors"
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full transition-colors"
                   title="Upload images"
                   disabled={isUploading || disabled}
                 >
-                  <ImageIcon className="h-4 w-4" />
+                  <ImageIcon className="h-3.5 w-3.5" />
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -540,6 +558,68 @@ export default function ChatInput({
                     className="hidden"
                   />
                 </button>
+              )}
+
+              {/* Permission Mode Selector - show on task page */}
+              {projectId && onPermissionModeChange && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowPermissionMenu(!showPermissionMenu)}
+                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>{PERMISSION_MODE_OPTIONS.find(opt => opt.value === permissionMode)?.shortLabel || '只读'}</span>
+                  </button>
+
+                  {/* Permission Mode Dropdown */}
+                  {showPermissionMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-[100]"
+                        onClick={() => setShowPermissionMenu(false)}
+                      />
+                      <div className="absolute bottom-full left-0 mb-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-[101]">
+                        <div className="p-2">
+                          <div className="text-xs font-medium text-gray-500 px-2 py-1 mb-1">权限模式</div>
+                          {PERMISSION_MODE_OPTIONS.map(option => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                onPermissionModeChange(option.value);
+                                setShowPermissionMenu(false);
+                                requestAnimationFrame(() => textareaRef.current?.focus());
+                              }}
+                              className={`w-full text-left px-2 py-2 rounded-md text-sm transition-colors ${
+                                permissionMode === option.value
+                                  ? 'bg-gray-100'
+                                  : 'hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900">{option.label}</span>
+                                {permissionMode === option.value && (
+                                  <span className="text-xs text-gray-400">当前</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">{option.description}</div>
+                              {option.hint && (
+                                <div className="text-xs text-blue-600 mt-1">{option.hint}</div>
+                              )}
+                              {option.warning && (
+                                <div className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  <span>{option.warning}</span>
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
               {/* Work Mode on task page: Show directory selector as single button */}
@@ -563,36 +643,14 @@ export default function ChatInput({
                       alert('Directory selection is not supported in this environment. Please use the desktop client.');
                     }
                   }}
-                  className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors flex items-center gap-1"
+                  className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
                   title={work_directory || '点击选择工作区'}
                 >
-                  <span>工作区:</span>
-                  <span className="text-gray-500 truncate max-w-[150px]">
+                  <Folder className="h-3.5 w-3.5" />
+                  <span className="truncate max-w-[80px]">
                     {work_directory ? (work_directory.split(/[/\\]/).pop() || work_directory) : '未选择'}
                   </span>
                 </button>
-              )}
-
-              {/* Permission Mode Selector - show on task page */}
-              {projectId && onPermissionModeChange && (
-                <div className="relative">
-                  <select
-                    value={permissionMode}
-                    onChange={(e) => {
-                      onPermissionModeChange(e.target.value as PermissionMode);
-                      requestAnimationFrame(() => textareaRef.current?.focus());
-                    }}
-                    className="appearance-none pl-6 pr-2 py-1 rounded text-xs bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-gray-300"
-                    title={PERMISSION_MODE_OPTIONS.find(opt => opt.value === permissionMode)?.description || ''}
-                  >
-                    {PERMISSION_MODE_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Shield className="absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 pointer-events-none" />
-                </div>
               )}
 
               {/* Hidden controls - kept for future use */}

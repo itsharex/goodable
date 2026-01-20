@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { Brain } from 'lucide-react';
 import ToolResultItem from './ToolResultItem';
 import ThinkingSection from './ThinkingSection';
+import PermissionConfirmCard from './PermissionConfirmCard';
 import type { ChatMessage, RealtimeEvent, RealtimeStatus, ConversationStatsInfo } from '@/types';
 import { toChatMessage, normalizeChatContent } from '@/lib/serializers/client/chat';
 import { toRelativePath } from '@/lib/utils/path';
@@ -980,6 +981,18 @@ interface ActiveSession {
   durationSeconds?: number;
 }
 
+interface PendingPermission {
+  id: string;
+  projectId: string;
+  requestId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  inputPreview: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+}
+
 interface ChatLogProps {
   projectId: string;
   onSessionStatusChange?: (isRunning: boolean) => void;
@@ -1000,9 +1013,10 @@ interface ChatLogProps {
   onDemoStart?: (deployedUrl?: string) => void;
   onDemoReplayComplete?: () => void;
   isDemoReplay?: boolean;
+  onPermissionRequest?: (permission: PendingPermission) => void;
 }
 
-export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onFileChange, onDemoStart, onDemoReplayComplete, isDemoReplay }: ChatLogProps) {
+export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onFileChange, onDemoStart, onDemoReplayComplete, isDemoReplay, onPermissionRequest }: ChatLogProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
@@ -1817,6 +1831,14 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
             metadata: data?.severity ? { severity: data.severity } : undefined,
           };
           handleRealtimeStatus('preview_success', payload);
+          break;
+        }
+        case 'permission_request': {
+          const data = envelope.data as PendingPermission | undefined;
+          if (data && onPermissionRequest) {
+            console.log('[ChatLog] Permission request received:', data.id, data.toolName);
+            onPermissionRequest(data);
+          }
           break;
         }
         case 'heartbeat':

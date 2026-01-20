@@ -2,7 +2,7 @@ import type { MessageMetadata } from '@/types/backend';
 
 export type MessageRole = 'assistant' | 'user' | 'system' | 'tool';
 
-export type MessageKind = 'chat' | 'tool_use' | 'error' | 'info' | string;
+export type MessageKind = 'chat' | 'tool_use' | 'error' | 'info' | 'permission' | string;
 
 export interface RealtimeMessage {
   id: string;
@@ -131,6 +131,19 @@ export interface ConversationStatsInfo {
   num_turns?: number;
 }
 
+export interface PermissionRequestInfo {
+  id: string;
+  projectId: string;
+  requestId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  inputPreview: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+  timestamp: string;
+}
+
 export type RealtimeEvent =
   | { type: 'message'; data: RealtimeMessage }
   | { type: 'status'; data: RealtimeStatus }
@@ -151,4 +164,5 @@ export type RealtimeEvent =
   | { type: 'task_interrupted'; data: TaskEventInfo }
   | { type: 'task_error'; data: TaskEventInfo }
   | { type: 'file_change'; data: FileChangeInfo }
-  | { type: 'conversation_stats'; data: ConversationStatsInfo };
+  | { type: 'conversation_stats'; data: ConversationStatsInfo }
+  | { type: 'permission_request'; data: PermissionRequestInfo };

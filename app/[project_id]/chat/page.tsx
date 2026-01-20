@@ -12,6 +12,7 @@ import {
   HelpCircle, Grid, Maximize2, User
 } from 'lucide-react';
 import ChatLog from '@/components/chat/ChatLog';
+import PermissionConfirmCard from '@/components/chat/PermissionConfirmCard';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { EnvironmentSettings } from '@/components/settings/EnvironmentSettings';
 import ChatInput from '@/components/chat/ChatInput';
@@ -72,6 +73,18 @@ const hexToFilter = (hex: string): string => {
 type Entry = { path: string; type: 'file'|'dir'; size?: number };
 type ProjectStatus = 'initializing' | 'active' | 'failed';
 type FilePreviewType = 'image' | 'video' | 'pdf' | 'markdown' | 'code';
+
+interface PendingPermission {
+  id: string;
+  projectId: string;
+  requestId: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  inputPreview: string;
+  createdAt: number;
+  expiresAt: number;
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+}
 
 // Detect file preview type based on extension
 const getFilePreviewType = (path: string): FilePreviewType => {
@@ -405,6 +418,7 @@ export default function ChatPage() {
   const [currentTodos, setCurrentTodos] = useState<Array<{ content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm?: string }>>([]);
   const [fileChanges, setFileChanges] = useState<Array<{ type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string }>>([]);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ requestId: string } | null>(null);
+  const [pendingPermissions, setPendingPermissions] = useState<PendingPermission[]>([]);
   const approvedRequestIdsRef = useRef<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -2365,6 +2379,24 @@ const persistProjectPreferences = useCallback(
   };
 
 
+  // Handle permission request from ChatLog SSE
+  const handlePermissionRequest = useCallback((permission: PendingPermission) => {
+    console.log('[Page] Permission request received:', permission.id, permission.toolName);
+    setPendingPermissions(prev => {
+      // Avoid duplicates
+      if (prev.some(p => p.id === permission.id)) {
+        return prev;
+      }
+      return [...prev, permission];
+    });
+  }, []);
+
+  // Handle permission resolved (approved or denied)
+  const handlePermissionResolved = useCallback((permissionId: string, approved: boolean) => {
+    console.log('[Page] Permission resolved:', permissionId, approved ? 'approved' : 'denied');
+    setPendingPermissions(prev => prev.filter(p => p.id !== permissionId));
+  }, []);
+
   // Handle project status updates via callback from ChatLog
   const handleProjectStatusUpdate = (status: string, message?: string) => {
     const previousStatus = projectStatus;
@@ -2844,10 +2876,24 @@ const persistProjectPreferences = useCallback(
                   console.log('[DemoMode] Replay complete, starting preview...');
                   start();
                 }}
+                onPermissionRequest={handlePermissionRequest}
               />
               </ChatErrorBoundary>
             </div>
-            
+
+            {/* Pending permission requests */}
+            {pendingPermissions.length > 0 && (
+              <div className="px-4 pb-2">
+                {pendingPermissions.map((permission) => (
+                  <PermissionConfirmCard
+                    key={permission.id}
+                    permission={permission}
+                    onResolved={handlePermissionResolved}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Simple input area */}
             <div className="p-4 rounded-bl-2xl">
               <ChatInput

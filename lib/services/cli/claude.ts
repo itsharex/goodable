@@ -29,7 +29,7 @@ import { timelineLogger } from '@/lib/services/timeline';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import type { Query } from '@anthropic-ai/claude-agent-sdk';
 import type { PermissionMode } from '@/types/backend/project';
-import { shouldAutoApprove, logPermissionDecision } from '@/lib/services/permissions';
+import { shouldAutoApprove, logPermissionDecision, addPendingPermissionAndWait } from '@/lib/services/permissions';
 
 type ToolAction = 'Edited' | 'Created' | 'Read' | 'Deleted' | 'Generated' | 'Searched' | 'Executed';
 
@@ -963,29 +963,47 @@ export async function executeClaude(
     }
 
     // Build canUseTool callback for permission control
+    // SDK expects return format: { behavior: 'allow' | 'deny', updatedInput?, message? }
     const canUseTool = projectPermissionMode !== 'bypassPermissions'
       ? async (toolName: string, toolInput: Record<string, unknown>) => {
           const autoApprove = shouldAutoApprove(toolName, projectPermissionMode);
           logPermissionDecision(projectId, toolName, projectPermissionMode, autoApprove, toolInput);
 
           if (autoApprove) {
-            return true;
+            return { behavior: 'allow' as const, updatedInput: toolInput };
           }
 
-          // For now, auto-approve everything but log it (quick verification phase)
-          // In the future, this will return false and wait for user confirmation
-          console.log(`[ClaudeService] 🔐 Permission required for ${toolName}, auto-approving for verification`);
-          logPermissionDecision(projectId, toolName, projectPermissionMode, true, toolInput);
-          return true;
+          // Add pending permission and wait for user confirmation
+          console.log(`[ClaudeService] 🔐 Permission required for ${toolName}, waiting for user confirmation...`);
+          const { permission: pendingPerm, waitPromise } = addPendingPermissionAndWait(projectId, requestId || '', toolName, toolInput);
+
+          // Notify frontend via SSE that a permission is pending
+          streamManager.publish(projectId, {
+            type: 'permission_request',
+            data: {
+              ...pendingPerm,
+              timestamp: new Date().toISOString(),
+            },
+          });
+
+          // Wait for user to approve/deny (with timeout) - uses Promise resolve directly
+          const approved = await waitPromise;
+          console.log(`[ClaudeService] 🔐 Permission ${pendingPerm.id} resolved: ${approved ? 'approved' : 'denied'}`);
+
+          return approved
+            ? { behavior: 'allow' as const, updatedInput: toolInput }
+            : { behavior: 'deny' as const, message: 'User denied permission' };
         }
       : undefined;
 
-    // Build PreToolUse hook for logging (SDK format: hooks.PreToolUse[].hooks[])
+    // Build PreToolUse hook for permission control (SDK format: hooks.PreToolUse[].hooks[])
+    // This is the PRIMARY permission gate - canUseTool may not trigger for all tools
     const preToolUseHook = async (input: any, toolUseID: string) => {
       if (input.hook_event_name !== 'PreToolUse') {
         return {};
       }
       const toolName = input.tool_name || 'unknown';
+      const toolInput = input.tool_input || {};
       console.log(`[ClaudeService] 🔧 PreToolUse: ${toolName} | mode=${projectPermissionMode} | id=${toolUseID}`);
       timelineLogger.logSDK(
         projectId,
@@ -995,7 +1013,43 @@ export async function executeClaude(
         { toolName, mode: projectPermissionMode, toolUseID },
         'sdk.permission.pre_tool'
       ).catch(() => {});
-      return {};
+
+      // Skip permission check if bypassPermissions mode
+      if (projectPermissionMode === 'bypassPermissions') {
+        return {};
+      }
+
+      // Check if tool should auto-approve
+      const autoApprove = shouldAutoApprove(toolName, projectPermissionMode);
+      logPermissionDecision(projectId, toolName, projectPermissionMode, autoApprove, toolInput);
+
+      if (autoApprove) {
+        console.log(`[ClaudeService] 🔧 PreToolUse: ${toolName} auto-approved`);
+        return {};
+      }
+
+      // Need user confirmation - create pending permission and wait
+      console.log(`[ClaudeService] 🔐 PreToolUse: ${toolName} requires user confirmation, waiting...`);
+      const { permission: pendingPerm, waitPromise } = addPendingPermissionAndWait(projectId, requestId || '', toolName, toolInput);
+
+      // Notify frontend via SSE
+      streamManager.publish(projectId, {
+        type: 'permission_request',
+        data: {
+          ...pendingPerm,
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      // Wait for user response (with timeout) - uses Promise resolve directly, not polling
+      const approved = await waitPromise;
+      console.log(`[ClaudeService] 🔐 PreToolUse permission ${pendingPerm.id} resolved: ${approved ? 'approved' : 'denied'}`);
+
+      if (approved) {
+        return {};
+      } else {
+        return { decision: 'block', reason: 'User denied permission' };
+      }
     };
 
     const hooks = projectPermissionMode !== 'bypassPermissions'

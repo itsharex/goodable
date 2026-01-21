@@ -3763,6 +3763,25 @@ const persistProjectPreferences = useCallback(
                       )}
                     </div>
                     <div className="flex items-center gap-1">
+                      {/* Open workspace folder button - only show in grid mode */}
+                      {fileViewMode === 'grid' && (workDirectory || projectPath) && (
+                        <button
+                          onClick={async () => {
+                            const folderPath = workDirectory || projectPath;
+                            if (typeof window !== 'undefined' && (window as any).desktopAPI?.openFolder) {
+                              try {
+                                await (window as any).desktopAPI.openFolder(folderPath);
+                              } catch (error) {
+                                console.error('Failed to open folder:', error);
+                              }
+                            }
+                          }}
+                          className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"
+                          title={`打开 ${workDirectory ? '工作区' : '项目'}目录`}
+                        >
+                          <FolderOpen size={12} />
+                        </button>
+                      )}
                       <button
                         onClick={() => setFileViewMode(fileViewMode === 'list' ? 'grid' : 'list')}
                         className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded transition-colors"

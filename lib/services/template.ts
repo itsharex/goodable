@@ -190,7 +190,7 @@ async function copyDirectory(src: string, dest: string): Promise<void> {
 
 /**
  * Extract zip template to target directory
- * Automatically handles nested 'project/' directory if present
+ * Requires zip to have a single wrapper directory containing project files
  */
 export async function extractZipTemplate(zipPath: string, targetPath: string): Promise<void> {
   try {
@@ -198,39 +198,30 @@ export async function extractZipTemplate(zipPath: string, targetPath: string): P
     zip.extractAllTo(targetPath, true);
     console.log(`[TemplateService] Extracted ${zipPath} to ${targetPath}`);
 
-    // Check for nested 'project/' directory
+    // Check for wrapper directory (standard zip format)
     const entries = await fs.readdir(targetPath, { withFileTypes: true });
-
-    // Filter hidden files (like .DS_Store) and check for nested project directory
     const visibleEntries = entries.filter(e => !e.name.startsWith('.'));
+    const directories = visibleEntries.filter(e => e.isDirectory());
 
-    // Check if 'project' directory exists (ignore other directories like 'logs')
-    const projectEntry = visibleEntries.find(
-      e => e.isDirectory() && e.name.toLowerCase() === 'project'
-    );
+    // If only one directory exists, unwrap it
+    if (directories.length === 1 && visibleEntries.length === 1) {
+      const wrapperDir = directories[0];
+      const wrapperPath = path.join(targetPath, wrapperDir.name);
+      const tempPath = path.join(targetPath, '..', `temp-unwrap-${Date.now()}`);
 
-    // If 'project' directory exists, unwrap it
-    if (projectEntry) {
-      const nestedProjectPath = path.join(targetPath, projectEntry.name);
-      const tempPath = path.join(targetPath, '..', `temp-${Date.now()}`);
+      console.log(`[TemplateService] Unwrapping directory: ${wrapperDir.name}`);
 
-      console.log(`[TemplateService] Detected nested 'project/' directory, unwrapping...`);
+      await fs.rename(wrapperPath, tempPath);
 
-      // Move nested content to temp location
-      await fs.rename(nestedProjectPath, tempPath);
-
-      // Move temp content to target
-      const nestedEntries = await fs.readdir(tempPath, { withFileTypes: true });
-      for (const entry of nestedEntries) {
+      const innerEntries = await fs.readdir(tempPath, { withFileTypes: true });
+      for (const entry of innerEntries) {
         const srcPath = path.join(tempPath, entry.name);
         const destPath = path.join(targetPath, entry.name);
         await fs.rename(srcPath, destPath);
       }
 
-      // Remove temp directory
       await fs.rmdir(tempPath);
-
-      console.log(`[TemplateService] ✅ Unwrapped nested 'project/' directory`);
+      console.log(`[TemplateService] ✅ Unwrapped wrapper directory`);
     }
   } catch (error) {
     console.error(`[TemplateService] Failed to extract zip:`, error);
@@ -578,6 +569,7 @@ function isSecurePath(filepath: string): boolean {
 
 /**
  * Import template from zip file
+ * Requires zip to have a wrapper directory containing template files
  */
 export async function importTemplate(zipBuffer: Buffer): Promise<{ success: boolean; message: string; templateId?: string }> {
   const tempExtractPath = path.join(USER_TEMPLATES_DIR_ABSOLUTE, `temp-import-${Date.now()}`);
@@ -603,8 +595,22 @@ export async function importTemplate(zipBuffer: Buffer): Promise<{ success: bool
     zip.extractAllTo(tempExtractPath, true);
     console.log(`[TemplateService] Extracted zip to temp: ${tempExtractPath}`);
 
-    // Read template.json
-    const metadataPath = path.join(tempExtractPath, 'template.json');
+    // Check for wrapper directory (standard zip format requires one)
+    const entries = await fs.readdir(tempExtractPath, { withFileTypes: true });
+    const visibleEntries = entries.filter(e => !e.name.startsWith('.'));
+    const directories = visibleEntries.filter(e => e.isDirectory());
+
+    if (directories.length !== 1 || visibleEntries.length !== 1) {
+      await fs.rm(tempExtractPath, { recursive: true, force: true });
+      return { success: false, message: 'zip 包格式错误：必须包含一个外层文件夹' };
+    }
+
+    const wrapperDir = directories[0];
+    const templateRoot = path.join(tempExtractPath, wrapperDir.name);
+    console.log(`[TemplateService] Found wrapper directory: ${wrapperDir.name}`);
+
+    // Read template.json from wrapper directory
+    const metadataPath = path.join(templateRoot, 'template.json');
     const metadataExists = await fs.access(metadataPath).then(() => true).catch(() => false);
 
     if (!metadataExists) {
@@ -627,8 +633,8 @@ export async function importTemplate(zipBuffer: Buffer): Promise<{ success: bool
     }
 
     // Check if project.zip or project/ exists
-    const projectZipPath = path.join(tempExtractPath, 'project.zip');
-    const projectPath = path.join(tempExtractPath, 'project');
+    const projectZipPath = path.join(templateRoot, 'project.zip');
+    const projectPath = path.join(templateRoot, 'project');
     const hasZip = await fs.access(projectZipPath).then(() => true).catch(() => false);
     const hasProject = await fs.access(projectPath).then(() => true).catch(() => false);
 
@@ -670,9 +676,10 @@ export async function importTemplate(zipBuffer: Buffer): Promise<{ success: bool
       }
     }
 
-    // Move to final location
+    // Move to final location (move the wrapper content, not the temp dir)
     const finalPath = path.join(USER_TEMPLATES_DIR_ABSOLUTE, metadata.id);
-    await fs.rename(tempExtractPath, finalPath);
+    await fs.rename(templateRoot, finalPath);
+    await fs.rm(tempExtractPath, { recursive: true, force: true });
 
     console.log(`[TemplateService] ✅ Imported template: ${metadata.name} (${metadata.id}) v${metadata.version}`);
 

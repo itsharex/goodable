@@ -247,8 +247,8 @@ function WorkspaceContent() {
     setTimeout(() => setSkillsMessage(null), 2000);
   };
 
-  // Import skill
-  const importSkill = async () => {
+  // Import skill from path
+  const importSkillFromPath = async () => {
     if (!importPath.trim()) return;
     setImporting(true);
     try {
@@ -261,6 +261,43 @@ function WorkspaceContent() {
       if (response.ok) {
         setSkillsMessage({ type: 'success', text: '导入成功' });
         setImportPath('');
+        await loadSkills();
+      } else {
+        setSkillsMessage({ type: 'error', text: data.error || '导入失败' });
+      }
+    } catch (error) {
+      setSkillsMessage({ type: 'error', text: '导入失败' });
+    } finally {
+      setImporting(false);
+    }
+    setTimeout(() => setSkillsMessage(null), 3000);
+  };
+
+  // Import skill from ZIP file upload
+  const importSkillFromFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    event.target.value = '';
+
+    if (!file.name.endsWith('.zip')) {
+      setSkillsMessage({ type: 'error', text: '只支持 .zip 格式文件' });
+      setTimeout(() => setSkillsMessage(null), 3000);
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE}/api/skills/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSkillsMessage({ type: 'success', text: '导入成功' });
         await loadSkills();
       } else {
         setSkillsMessage({ type: 'error', text: data.error || '导入失败' });
@@ -1270,97 +1307,92 @@ function WorkspaceContent() {
         {/* Skills View */}
         {currentView === 'skills' && (
           <div className="flex-1 overflow-y-auto p-8">
-            <div className="max-w-4xl mx-auto space-y-6">
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">我的技能</h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    技能包让 AI 学会特定任务（如创建 PPT、处理文档等）
-                  </p>
-                </div>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">我的技能</h2>
+              <div className="flex items-center gap-2">
                 {skillsMessage && (
                   <span className={`text-sm ${skillsMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
                     {skillsMessage.text}
                   </span>
                 )}
-              </div>
-
-              {/* Import Section */}
-              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <input
-                  type="text"
-                  value={importPath}
-                  onChange={(e) => setImportPath(e.target.value)}
-                  placeholder="输入技能文件夹或 ZIP 文件路径..."
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                  type="file"
+                  id="skill-import-input"
+                  accept=".zip"
+                  onChange={importSkillFromFile}
+                  className="hidden"
+                  disabled={importing}
                 />
-                <button
-                  onClick={importSkill}
-                  disabled={importing || !importPath.trim()}
-                  className="px-4 py-1.5 text-sm font-medium bg-gray-900 hover:bg-gray-800 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                <label
+                  htmlFor="skill-import-input"
+                  className={`px-4 py-2 ${
+                    importing
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-black hover:bg-gray-900 cursor-pointer'
+                  } text-white text-sm font-medium rounded-lg transition-colors inline-block`}
                 >
                   {importing ? '导入中...' : '导入技能'}
-                </button>
+                </label>
               </div>
-
-              {/* Skills List */}
-              {skillsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-gray-500">加载中...</div>
-                </div>
-              ) : skills.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Sparkles className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <p>暂无技能</p>
-                  <p className="text-sm mt-1">导入技能包或将内置技能放入 skills 目录</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {skills.map((skill) => (
-                    <div
-                      key={skill.name}
-                      className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-200 hover:border-gray-300 transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-gray-900 text-sm">{skill.displayName || skill.name}</h4>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            skill.source === 'builtin'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {skill.source === 'builtin' ? '内置' : '用户导入'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{skill.description}</p>
-                        <p className="text-xs text-gray-400 mt-1">大小: {formatSize(skill.size)}</p>
-                      </div>
-                      <div className="flex items-center gap-3 ml-4">
-                        {/* Delete Button (only for user skills) */}
-                        {skill.source === 'user' && (
-                          <button
-                            onClick={() => deleteSkill(skill.name)}
-                            className="px-3 py-1 text-xs font-medium text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg transition-colors"
-                          >
-                            删除
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Footer Stats */}
-              {skills.length > 0 && (
-                <div className="pt-4 border-t border-gray-200 text-sm text-gray-500">
-                  共 {skills.length} 个技能
-                </div>
-              )}
             </div>
+
+            {/* Skills List */}
+            {skillsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-gray-500">加载中...</div>
+              </div>
+            ) : skills.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Sparkles className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-gray-500">暂无技能</p>
+                <p className="text-sm text-gray-400 mt-2">导入技能包或将内置技能放入 skills 目录</p>
+              </div>
+            ) : (
+              <div className="grid gap-3 grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                {skills.map((skill) => (
+                  <div
+                    key={skill.name}
+                    className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900 text-base truncate">
+                          {skill.displayName || skill.name}
+                        </h3>
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          skill.source === 'builtin'
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {skill.source === 'builtin' ? '内置' : '导入'}
+                        </span>
+                      </div>
+                      {skill.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                          {skill.description}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        大小: {formatSize(skill.size)}
+                      </p>
+                    </div>
+                    {skill.source === 'user' && (
+                      <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => deleteSkill(skill.name)}
+                          className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

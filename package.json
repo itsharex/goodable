@@ -164,6 +164,13 @@
       {
         "from": "builtin-employees.json",
         "to": "builtin-employees.json"
+      },
+      {
+        "from": "docs/ai-services",
+        "to": "docs/ai-services",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "afterSign": "tools/macos-signing/afterSign.js",

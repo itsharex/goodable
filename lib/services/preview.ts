@@ -19,6 +19,8 @@ import {
   ensurePythonGitignore,
 } from '@/lib/utils/python';
 import { getBuiltinNodePath, getBuiltinNpmCliPath, getBuiltinNodeDir } from '@/lib/config/paths';
+import { loadGlobalSettings } from './settings';
+import { buildAIServicesEnv } from '@/lib/config/prompts/ai-services';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -71,30 +73,39 @@ const PREVIEW_IDLE_CHECK_INTERVAL_MS = 10_000;
 const __VERBOSE_LOG__ = (process.env.LOG_LEVEL || '').toLowerCase() === 'verbose';
 
 /**
- * 创建子项目的安全环境变量
- * 过滤掉主项目特有的敏感变量，防止污染子项目
+ * Create safe environment variables for subprocess
+ * Filters out main project sensitive variables to prevent pollution
  */
-function createSafeSubprocessEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv {
-  // 黑名单：主项目特有的变量，绝对不能传递给子项目
+async function createSafeSubprocessEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Promise<NodeJS.ProcessEnv> {
+  // Blacklist: main project specific variables that should never be passed to subprojects
   const BLACKLIST = [
-    'DATABASE_URL',      // 主项目数据库（最危险）
-    'ENCRYPTION_KEY',    // 主项目加密密钥
-    'PROJECTS_DIR',      // 主项目配置目录
+    'DATABASE_URL',      // Main project database (most dangerous)
+    'ENCRYPTION_KEY',    // Main project encryption key
+    'PROJECTS_DIR',      // Main project config directory
   ];
 
   const safeEnv: Record<string, string | undefined> = { NODE_ENV: 'development' };
 
-  // 复制所有非黑名单的环境变量
+  // Copy all non-blacklisted environment variables
   for (const [key, value] of Object.entries(process.env)) {
     if (!BLACKLIST.includes(key)) {
       safeEnv[key] = value;
     }
   }
 
-  // 应用覆盖变量（优先级最高）
+  // Inject AI services environment variables
+  try {
+    const settings = await loadGlobalSettings();
+    const aiServicesEnv = buildAIServicesEnv(settings.ai_services);
+    Object.assign(safeEnv, aiServicesEnv);
+  } catch (error) {
+    console.error('[PreviewManager] Failed to load AI services env:', error);
+  }
+
+  // Apply override variables (highest priority)
   Object.assign(safeEnv, overrides);
 
-  // 规范化运行模式，确保为有效取值
+  // Normalize run mode to valid values
   const mode = String(safeEnv.NODE_ENV || '').toLowerCase();
   if (mode !== 'development' && mode !== 'production' && mode !== 'test') {
     safeEnv.NODE_ENV = 'development';
@@ -1379,7 +1390,7 @@ class PreviewManager {
         await timelineLogger.logInstall(projectId, 'Prisma schema detected', 'info', taskId, { schemaPath }, 'prisma.detect');
       } catch {}
 
-      const env = createSafeSubprocessEnv({
+      const env = await createSafeSubprocessEnv({
         NODE_ENV: 'development',
         DATABASE_URL: 'file:./sub_dev.db',
       });
@@ -1578,7 +1589,7 @@ class PreviewManager {
           if (!hasNodeModules) {
             await runInstallWithPreferredManager(
               projectPath,
-              createSafeSubprocessEnv(),
+              await createSafeSubprocessEnv(),
               collectFromChunk,
               projectId,
               taskId
@@ -1836,7 +1847,7 @@ class PreviewManager {
 
     const initialUrl = `http://localhost:${preferredPort}`;
 
-    const env: NodeJS.ProcessEnv = createSafeSubprocessEnv({
+    const env: NodeJS.ProcessEnv = await createSafeSubprocessEnv({
       PORT: String(preferredPort),
       WEB_PORT: String(preferredPort),
       NEXT_PUBLIC_APP_URL: initialUrl,
@@ -2739,7 +2750,7 @@ async function resolvePort(preferredPort) {
 
     await installPythonDependenciesWithRetry(
       projectPath,
-      createSafeSubprocessEnv(),
+      await createSafeSubprocessEnv(),
       log,
       projectId,
       taskId
@@ -2755,6 +2766,11 @@ async function resolvePort(preferredPort) {
       )
     );
     log(Buffer.from('[PreviewManager] ========================================'));
+
+    const pythonEnv = await createSafeSubprocessEnv({
+      PYTHONUNBUFFERED: '1', // Disable Python output buffering
+      PYTHONIOENCODING: 'utf-8',
+    });
 
     const child = spawn(
       venvPython,
@@ -2772,10 +2788,7 @@ async function resolvePort(preferredPort) {
       ],
       {
         cwd: projectPath,
-        env: createSafeSubprocessEnv({
-          PYTHONUNBUFFERED: '1', // 禁用Python输出缓冲
-          PYTHONIOENCODING: 'utf-8',
-        }),
+        env: pythonEnv,
         shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       }

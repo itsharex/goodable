@@ -642,3 +642,51 @@ export const USER_EMPLOYEES_DIR_ABSOLUTE = getUserEmployeesDirectory();
 export function getUserEmployeesPath(): string {
   return path.join(USER_EMPLOYEES_DIR_ABSOLUTE, 'user-employees.json');
 }
+
+// ========== AI Services Docs ==========
+
+/**
+ * Get AI services documentation directory path
+ * This directory contains usage docs for platform-provided AI services (ASR, TTS, etc.)
+ */
+function getAIServicesDocsDirectory(): string {
+  // Priority 1: GOODABLE_RESOURCES_PATH (passed from Electron main to standalone subprocess)
+  const resourcesPath = process.env.GOODABLE_RESOURCES_PATH;
+  if (resourcesPath) {
+    const docsPath = path.join(resourcesPath, 'docs', 'ai-services');
+    if (fs.existsSync(docsPath)) {
+      console.log(`[PathConfig] ✅ AI services docs via GOODABLE_RESOURCES_PATH: ${docsPath}`);
+      return docsPath;
+    }
+  }
+
+  // Priority 2: Electron's process.resourcesPath (production)
+  const electronResourcesPath = (process as any).resourcesPath as string | undefined;
+  if (electronResourcesPath && fs.existsSync(electronResourcesPath)) {
+    const docsPath = path.join(electronResourcesPath, 'docs', 'ai-services');
+    if (fs.existsSync(docsPath)) {
+      console.log(`[PathConfig] ✅ AI services docs (production): ${docsPath}`);
+      return docsPath;
+    }
+  }
+
+  // Priority 3: Development fallback - use docs/ai-services in project root
+  const docsPath = path.join(process.cwd(), 'docs', 'ai-services');
+
+  try {
+    if (!fs.existsSync(docsPath)) {
+      console.log(`[PathConfig] Creating AI services docs directory: ${docsPath}`);
+      fs.mkdirSync(docsPath, { recursive: true });
+    }
+    console.log(`[PathConfig] ✅ AI services docs configured: ${docsPath}`);
+  } catch (error) {
+    console.warn(`[PathConfig] ⚠️ Cannot access AI services docs directory: ${docsPath}`);
+  }
+
+  return docsPath;
+}
+
+/**
+ * Absolute path to AI services documentation directory
+ */
+export const AI_SERVICES_DOCS_PATH = getAIServicesDocsDirectory();

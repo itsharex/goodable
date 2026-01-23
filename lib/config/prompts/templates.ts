@@ -1,8 +1,10 @@
 /**
- * 固定模板（不可编辑）
+ * Fixed templates (non-editable)
  *
- * 这些模板包含占位符，在运行时动态替换
+ * These templates contain placeholders that are replaced at runtime
  */
+
+import { buildAIServicesPrompt, type AIServicesConfig } from './ai-services';
 
 /**
  * 执行阶段前缀模板
@@ -38,26 +40,40 @@ export const SECURITY_WARNING_TEMPLATE = `
 `;
 
 /**
- * 构建执行阶段完整系统提示词
+ * Build execution system prompt with AI services
  *
- * @param projectPath - 项目路径
- * @param basePrompt - 基础提示词（可编辑部分）
- * @returns 完整的系统提示词
+ * @param projectPath - Project path
+ * @param basePrompt - Base prompt (editable part)
+ * @param aiServicesConfig - Optional AI services configuration
+ * @returns Complete system prompt
  */
-export function buildExecutionSystemPrompt(projectPath: string, basePrompt: string): string {
+export function buildExecutionSystemPrompt(
+  projectPath: string,
+  basePrompt: string,
+  aiServicesConfig?: AIServicesConfig
+): string {
   const prefix = EXECUTION_PREFIX_TEMPLATE.replace('{{PROJECT_PATH}}', projectPath);
-  return `${prefix}${SECURITY_WARNING_TEMPLATE}
+  const aiServicesPrompt = buildAIServicesPrompt(aiServicesConfig);
 
+  return `${prefix}${SECURITY_WARNING_TEMPLATE}
+${aiServicesPrompt ? '\n' + aiServicesPrompt + '\n' : ''}
 ${basePrompt}`;
 }
 
 /**
- * 构建规划阶段完整系统提示词
+ * Build planning system prompt with AI services
  *
- * @param basePrompt - 基础提示词（可编辑部分）
- * @returns 完整的系统提示词
+ * @param basePrompt - Base prompt (editable part)
+ * @param aiServicesConfig - Optional AI services configuration
+ * @returns Complete system prompt
  */
-export function buildPlanningSystemPrompt(basePrompt: string): string {
-  // 规划阶段没有动态前缀，直接返回
+export function buildPlanningSystemPrompt(
+  basePrompt: string,
+  aiServicesConfig?: AIServicesConfig
+): string {
+  const aiServicesPrompt = buildAIServicesPrompt(aiServicesConfig);
+  if (aiServicesPrompt) {
+    return `${aiServicesPrompt}\n${basePrompt}`;
+  }
   return basePrompt;
 }

@@ -4,6 +4,7 @@ import {
   updateGlobalSettings,
   normalizeCliSettings,
 } from '@/lib/services/settings';
+import type { AIServicesConfig } from '@/lib/config/prompts/ai-services';
 
 function serialize(settings: Awaited<ReturnType<typeof loadGlobalSettings>>) {
   return {
@@ -34,6 +35,20 @@ export async function PUT(request: NextRequest) {
     const cliSettings = normalizeCliSettings(cliSettingsRaw as Record<string, unknown> | undefined);
     if (cliSettings) {
       update.cli_settings = cliSettings;
+    }
+
+    // Handle ai_services update
+    const aiServicesRaw = candidate.ai_services;
+    if (aiServicesRaw && typeof aiServicesRaw === 'object') {
+      // Merge with existing ai_services
+      const current = await loadGlobalSettings();
+      const currentAiServices = current.ai_services || {};
+      const newAiServices = aiServicesRaw as Partial<AIServicesConfig>;
+
+      update.ai_services = {
+        ...currentAiServices,
+        ...newAiServices,
+      };
     }
 
     const nextSettings = await updateGlobalSettings(update);

@@ -12,6 +12,7 @@ import { buildExecutionSystemPrompt, buildPlanningSystemPrompt } from './templat
 export * from './types';
 export * from './defaults';
 export * from './templates';
+export * from './ai-services';
 
 /**
  * 获取提示词（热读取）
@@ -161,11 +162,11 @@ export async function resetPrompt(key?: PromptKey): Promise<void> {
 }
 
 /**
- * 获取执行阶段完整系统提示词（带动态前缀）
+ * Get execution system prompt with dynamic prefix and AI services
  *
- * @param projectType - 项目类型
- * @param projectPath - 项目路径
- * @returns 完整的系统提示词
+ * @param projectType - Project type
+ * @param projectPath - Project path
+ * @returns Complete system prompt
  */
 export async function getExecutionSystemPrompt(
   projectType: 'nextjs' | 'python-fastapi',
@@ -173,19 +174,31 @@ export async function getExecutionSystemPrompt(
 ): Promise<string> {
   const key: PromptKey = projectType === 'python-fastapi' ? 'python-execution' : 'nextjs-execution';
   const basePrompt = await getPrompt(key);
-  return buildExecutionSystemPrompt(projectPath, basePrompt);
+
+  // Load AI services config
+  const { loadGlobalSettings } = await import('@/lib/services/settings');
+  const settings = await loadGlobalSettings();
+  const aiServicesConfig = settings.ai_services;
+
+  return buildExecutionSystemPrompt(projectPath, basePrompt, aiServicesConfig);
 }
 
 /**
- * 获取规划阶段完整系统提示词
+ * Get planning system prompt with AI services
  *
- * @param projectType - 项目类型
- * @returns 完整的系统提示词
+ * @param projectType - Project type
+ * @returns Complete system prompt
  */
 export async function getPlanningSystemPrompt(
   projectType: 'nextjs' | 'python-fastapi'
 ): Promise<string> {
   const key: PromptKey = projectType === 'python-fastapi' ? 'python-planning' : 'nextjs-planning';
   const basePrompt = await getPrompt(key);
-  return buildPlanningSystemPrompt(basePrompt);
+
+  // Load AI services config
+  const { loadGlobalSettings } = await import('@/lib/services/settings');
+  const settings = await loadGlobalSettings();
+  const aiServicesConfig = settings.ai_services;
+
+  return buildPlanningSystemPrompt(basePrompt, aiServicesConfig);
 }

@@ -859,8 +859,22 @@ export async function executeClaude(
     console.log(`[ClaudeService] 🖥️  Platform: ${process.platform} (Windows: ${isWindows})`);
 
     // Get permission mode from project settings, default to 'default'
-    const projectPermissionMode = ((project as any).permissionMode as PermissionMode) || 'default';
-    console.log(`[ClaudeService] 🔐 Permission Mode: ${projectPermissionMode}`);
+    // Support both camelCase and snake_case field names from Drizzle ORM
+    const rawPermissionMode = (project as any).permissionMode || (project as any).permission_mode;
+    const projectPermissionMode = (rawPermissionMode as PermissionMode) || 'default';
+    console.log(`[ClaudeService] 🔐 Permission Mode: ${projectPermissionMode} (raw: ${rawPermissionMode})`);
+
+    // Log permission mode to timeline for debugging
+    try {
+      await timelineLogger.logSDK(
+        projectId,
+        `Permission Mode: ${projectPermissionMode}`,
+        'info',
+        requestId,
+        { permissionMode: projectPermissionMode, rawValue: rawPermissionMode },
+        'sdk.permission_mode'
+      );
+    } catch {}
 
     // 获取项目类型和模式
     const projectType = (project as any).projectType as string | undefined;
@@ -904,9 +918,11 @@ export async function executeClaude(
 
       // Use buildExecutionSystemPrompt (same as Code mode) + no-delete rule
       const { buildExecutionSystemPrompt, getPrompt } = await import('@/lib/config/prompts');
+      const { loadGlobalSettings } = await import('@/lib/services/settings');
+      const settings = await loadGlobalSettings();
       const basePrompt = employeePrompt || await getPrompt('work-mode');
       const noDeleteRule = `\n\n## 删除操作限制\n\n**禁止执行任何删除操作。** 如用户要求清理文件，请使用移动到指定文件夹（如 _trash）的方式替代删除。`;
-      systemPromptText = buildExecutionSystemPrompt(absoluteProjectPath, basePrompt + noDeleteRule);
+      systemPromptText = buildExecutionSystemPrompt(absoluteProjectPath, basePrompt + noDeleteRule, settings.ai_services);
     } else {
       // code 模式使用项目类型对应的提示词
       if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {
@@ -949,7 +965,7 @@ export async function executeClaude(
       console.log(`[ClaudeService] 🔧 Prepended builtin runtimes to PATH: ${pathParts.join(', ')}`);
     }
 
-    // 构建 env（仅传给 Claude 子进程，不影响主进程）
+    // Build env (only passed to Claude subprocess, does not affect main process)
     const envWithBuiltinNode: NodeJS.ProcessEnv = {
       ...process.env,
     };
@@ -958,10 +974,24 @@ export async function executeClaude(
       envWithBuiltinNode.PATH = pathParts.join(path.delimiter) + (originalPath ? path.delimiter + originalPath : '');
     }
 
-    // 注入 CLAUDE_CODE_GIT_BASH_PATH（SDK 硬依赖）
+    // Inject CLAUDE_CODE_GIT_BASH_PATH (SDK hard dependency)
     if (builtinGitBashPath) {
       envWithBuiltinNode.CLAUDE_CODE_GIT_BASH_PATH = builtinGitBashPath;
       console.log(`[ClaudeService] 🔧 Set CLAUDE_CODE_GIT_BASH_PATH: ${builtinGitBashPath}`);
+    }
+
+    // Inject AI services environment variables
+    try {
+      const { loadGlobalSettings } = await import('@/lib/services/settings');
+      const { buildAIServicesEnv } = await import('@/lib/config/prompts/ai-services');
+      const settings = await loadGlobalSettings();
+      const aiServicesEnv = buildAIServicesEnv(settings.ai_services);
+      Object.assign(envWithBuiltinNode, aiServicesEnv);
+      if (Object.keys(aiServicesEnv).length > 0) {
+        console.log(`[ClaudeService] 🔧 Injected AI services env:`, Object.keys(aiServicesEnv));
+      }
+    } catch (error) {
+      console.error('[ClaudeService] Failed to load AI services env:', error);
     }
 
     // Load enabled skills as plugins
@@ -1028,6 +1058,15 @@ export async function executeClaude(
 
       // Skip permission check if bypassPermissions mode
       if (projectPermissionMode === 'bypassPermissions') {
+        console.log(`[ClaudeService] ✅ PreToolUse: ${toolName} bypassed (全放行模式)`);
+        timelineLogger.logSDK(
+          projectId,
+          `Permission Bypassed: ${toolName}`,
+          'info',
+          requestId,
+          { toolName, mode: projectPermissionMode },
+          'sdk.permission.bypassed'
+        ).catch(() => {});
         return {};
       }
 
@@ -2142,9 +2181,11 @@ export async function generatePlan(
 
       // Use buildExecutionSystemPrompt (same as Code mode) + no-delete rule
       const { buildExecutionSystemPrompt, getPrompt } = await import('@/lib/config/prompts');
+      const { loadGlobalSettings } = await import('@/lib/services/settings');
+      const settings = await loadGlobalSettings();
       const basePrompt = employeePrompt || await getPrompt('work-mode');
       const noDeleteRule = `\n\n## 删除操作限制\n\n**禁止执行任何删除操作。** 如用户要求清理文件，请使用移动到指定文件夹（如 _trash）的方式替代删除。`;
-      systemPromptText = buildExecutionSystemPrompt(projectPath, basePrompt + noDeleteRule);
+      systemPromptText = buildExecutionSystemPrompt(projectPath, basePrompt + noDeleteRule, settings.ai_services);
     } else {
       // code 模式使用项目类型对应的规划提示词
       if (projectType !== 'nextjs' && projectType !== 'python-fastapi') {

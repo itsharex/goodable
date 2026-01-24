@@ -220,6 +220,7 @@ async function startProductionServer() {
     PORT: String(port),
     HOSTNAME: '127.0.0.1',
     NEXT_TELEMETRY_DISABLED: '1',
+    APP_VERSION: APP_VERSION, // Pass version to Next.js subprocess
   };
 
   // Windows: 注入内置 Git 环境变量（Claude SDK 依赖 git-bash）

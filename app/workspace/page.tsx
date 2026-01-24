@@ -46,6 +46,7 @@ interface SkillMeta {
   path: string;
   source: 'builtin' | 'user';
   size: number;
+  enabled: boolean;
 }
 
 function WorkspaceContent() {
@@ -243,6 +244,27 @@ function WorkspaceContent() {
       }
     } catch (error) {
       setSkillsMessage({ type: 'error', text: '删除失败' });
+    }
+    setTimeout(() => setSkillsMessage(null), 2000);
+  };
+
+  // Toggle skill enabled/disabled
+  const toggleSkillEnabled = async (skillName: string, enabled: boolean) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skillName)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (response.ok) {
+        setSkills(prev => prev.map(s => s.name === skillName ? { ...s, enabled } : s));
+        setSkillsMessage({ type: 'success', text: enabled ? '已启用' : '已禁用' });
+      } else {
+        const data = await response.json();
+        setSkillsMessage({ type: 'error', text: data.error || '操作失败' });
+      }
+    } catch (error) {
+      setSkillsMessage({ type: 'error', text: '操作失败' });
     }
     setTimeout(() => setSkillsMessage(null), 2000);
   };
@@ -1355,7 +1377,7 @@ function WorkspaceContent() {
                 {skills.map((skill) => (
                   <div
                     key={skill.name}
-                    className="bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 group"
+                    className={`bg-white rounded-xl p-4 hover:shadow-lg transition-shadow flex items-start gap-4 group ${!skill.enabled ? 'opacity-60' : ''}`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -1379,16 +1401,31 @@ function WorkspaceContent() {
                         大小: {formatSize(skill.size)}
                       </p>
                     </div>
-                    {skill.source === 'user' && (
-                      <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex-shrink-0 flex items-center gap-2">
+                      {/* Toggle switch */}
+                      <button
+                        onClick={() => toggleSkillEnabled(skill.name, !skill.enabled)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          skill.enabled ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                        title={skill.enabled ? '点击禁用' : '点击启用'}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            skill.enabled ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                      {/* Delete button (user skills only) */}
+                      {skill.source === 'user' && (
                         <button
                           onClick={() => deleteSkill(skill.name)}
-                          className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                         >
                           删除
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

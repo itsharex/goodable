@@ -1,15 +1,15 @@
 /**
  * Skills API - List and Import
- * GET /api/skills - Get all skills
+ * GET /api/skills - Get all skills with enabled status
  * POST /api/skills/import - Import skill from path
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllSkills, importSkill } from '@/lib/services/skill-service';
+import { getAllSkillsWithStatus, importSkill } from '@/lib/services/skill-service';
 
 export async function GET() {
   try {
-    const skills = await getAllSkills();
+    const skills = await getAllSkillsWithStatus();
     return NextResponse.json({ success: true, data: skills });
   } catch (error) {
     console.error('[Skills API] Error getting skills:', error);

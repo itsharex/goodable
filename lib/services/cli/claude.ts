@@ -35,6 +35,16 @@ type ToolAction = 'Edited' | 'Created' | 'Read' | 'Deleted' | 'Generated' | 'Sea
 
 const __VERBOSE_LOG__ = (process.env.LOG_LEVEL || '').toLowerCase() === 'verbose';
 
+// Debug mode for Claude SDK
+// Enable via DEBUG_CLAUDE_SDK=true in .env
+const __DEBUG_SDK__ = process.env.DEBUG_CLAUDE_SDK === 'true';
+
+// Enable SDK internal debugging when debug mode is on
+if (__DEBUG_SDK__) {
+  process.env.DEBUG_CLAUDE_AGENT_SDK = '1';
+  console.log('[ClaudeService] 🐛 SDK Debug Mode ENABLED - logs will be written to ~/.claude/debug/');
+}
+
 // System prompts moved to lib/config/prompts/
 // Import from there for hot-reloadable prompts
 
@@ -995,13 +1005,17 @@ export async function executeClaude(
     }
 
     // Load enabled skills as plugins
-    const { getEnabledSkillPaths, initializeBuiltinSkills } = await import('@/lib/services/skill-service');
-    // Ensure builtin skills are copied to user-skills directory
-    await initializeBuiltinSkills();
+    const { getEnabledSkillPaths } = await import('@/lib/services/skill-service');
+    // Skills are already initialized on app startup, just get enabled paths
     const enabledSkillPaths = await getEnabledSkillPaths();
     const plugins = enabledSkillPaths.map(p => ({ type: 'local' as const, path: p }));
     if (plugins.length > 0) {
       console.log(`[ClaudeService] 🧩 Loading ${plugins.length} skill plugins:`, enabledSkillPaths);
+    }
+
+    // Debug: Log detailed skill info
+    if (__DEBUG_SDK__ && plugins.length > 0) {
+      console.log('[ClaudeService][DEBUG] Skill plugins detail:', JSON.stringify(plugins, null, 2));
     }
 
     // Build canUseTool callback for permission control
@@ -1047,6 +1061,12 @@ export async function executeClaude(
       const toolName = input.tool_name || 'unknown';
       const toolInput = input.tool_input || {};
       console.log(`[ClaudeService] 🔧 PreToolUse: ${toolName} | mode=${projectPermissionMode} | id=${toolUseID}`);
+
+      // Debug: Log detailed tool input
+      if (__DEBUG_SDK__) {
+        console.log(`[ClaudeService][DEBUG] PreToolUse full input:`, JSON.stringify({ toolName, toolUseID, toolInput }, null, 2));
+      }
+
       timelineLogger.logSDK(
         projectId,
         `PreToolUse: ${toolName}`,
@@ -1110,6 +1130,20 @@ export async function executeClaude(
           }]
         }
       : undefined;
+
+    // Debug: Log SDK query options
+    if (__DEBUG_SDK__) {
+      console.log('[ClaudeService][DEBUG] SDK query options:', JSON.stringify({
+        cwd: absoluteProjectPath,
+        model: finalModel,
+        resume: sessionId,
+        permissionMode: projectPermissionMode,
+        maxOutputTokens,
+        pluginsCount: plugins.length,
+        hasHooks: !!hooks,
+        systemPromptLength: systemPromptText.length,
+      }, null, 2));
+    }
 
     const response = query({
       prompt: instruction,

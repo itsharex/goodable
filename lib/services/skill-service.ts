@@ -12,6 +12,12 @@ import {
   USER_SKILLS_DIR_ABSOLUTE,
 } from '@/lib/config/paths';
 
+// Global singleton for initialization state (similar to DB client pattern)
+const globalForSkills = global as unknown as {
+  skillsInitialized: boolean | undefined;
+  skillsInitPromise: Promise<void> | undefined;
+};
+
 export interface SkillMeta {
   name: string;
   displayName?: string;
@@ -21,8 +27,161 @@ export interface SkillMeta {
   size: number;
 }
 
-// Flag to track if builtin skills have been initialized in this process
-let builtinSkillsInitialized = false;
+// Plugin config interface (SDK standard fields only)
+interface PluginConfig {
+  name: string;
+  description: string;
+  version: string;
+  skills: string[];
+}
+
+/**
+ * Extended config file (plugin-ex.json)
+ *
+ * Why we need a separate extended config file:
+ * - Claude SDK's plugin.json has strict schema validation and only accepts standard fields (name, description, version, skills)
+ * - We need to track additional custom fields (disabledSkills, builtinVersion) for Goodable's skill management
+ * - These custom fields would cause SDK validation errors if added to plugin.json
+ * - Solution: Store SDK-compliant fields in plugin.json, store extended fields in plugin-ex.json
+ */
+interface SkillExtendedConfig {
+  disabledSkills?: string[];
+  builtinVersion?: string; // Track which app version initialized builtin skills
+}
+
+// Get app version (same as AppSidebar.tsx)
+// In production, APP_VERSION env is set by electron/main.js
+// In development, import from package.json works
+function getAppVersion(): string {
+  if (process.env.APP_VERSION) {
+    return process.env.APP_VERSION;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('@/package.json').version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+/**
+ * Get plugin.json path
+ */
+function getPluginJsonPath(): string {
+  return path.join(USER_SKILLS_DIR_ABSOLUTE, '.claude-plugin', 'plugin.json');
+}
+
+/**
+ * Get skill extended config file path (separate from plugin.json)
+ */
+function getSkillExtendedConfigPath(): string {
+  return path.join(USER_SKILLS_DIR_ABSOLUTE, '.claude-plugin', 'plugin-ex.json');
+}
+
+/**
+ * Read plugin.json config
+ */
+async function readPluginConfig(): Promise<PluginConfig | null> {
+  const configPath = getPluginJsonPath();
+  try {
+    if (!fsSync.existsSync(configPath)) {
+      return null;
+    }
+    const content = await fs.readFile(configPath, 'utf-8');
+    return JSON.parse(content) as PluginConfig;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write plugin.json config (SDK standard fields only)
+ */
+async function writePluginConfig(config: PluginConfig): Promise<void> {
+  const configPath = getPluginJsonPath();
+  const wrapperDir = path.dirname(configPath);
+  await fs.mkdir(wrapperDir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+/**
+ * Read skill extended config (internal tracking, not for SDK)
+ */
+async function readSkillExtendedConfig(): Promise<SkillExtendedConfig> {
+  const configPath = getSkillExtendedConfigPath();
+  try {
+    if (!fsSync.existsSync(configPath)) {
+      return {};
+    }
+    const content = await fs.readFile(configPath, 'utf-8');
+    return JSON.parse(content) as SkillExtendedConfig;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Write skill extended config (internal tracking, not for SDK)
+ */
+async function writeSkillExtendedConfig(config: SkillExtendedConfig): Promise<void> {
+  const configPath = getSkillExtendedConfigPath();
+  const wrapperDir = path.dirname(configPath);
+  await fs.mkdir(wrapperDir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+/**
+ * Validate and update plugin.json based on actual directory contents
+ * Preserves disabled skills list and builtin version marker (in separate config file)
+ */
+export async function validateAndUpdatePluginJson(builtinVersion?: string): Promise<void> {
+  // Scan user-skills directory for valid skills
+  const userSkillsDir = USER_SKILLS_DIR_ABSOLUTE;
+  if (!fsSync.existsSync(userSkillsDir)) {
+    await fs.mkdir(userSkillsDir, { recursive: true });
+  }
+
+  const entries = await fs.readdir(userSkillsDir, { withFileTypes: true });
+  const validSkillNames: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    const skillMdPath = path.join(userSkillsDir, entry.name, 'SKILL.md');
+    if (fsSync.existsSync(skillMdPath)) {
+      validSkillNames.push(entry.name);
+    }
+  }
+
+  // Read existing config to preserve disabled list and version
+  const existingConfig = await readSkillExtendedConfig();
+  const disabledSkills = existingConfig.disabledSkills || [];
+
+  // Filter out disabled skills from enabled list
+  const enabledSkillPaths = validSkillNames
+    .filter(name => !disabledSkills.includes(name))
+    .map(name => `./${name}`);
+
+  // Also clean up disabled list (remove skills that no longer exist)
+  const validDisabledSkills = disabledSkills.filter(name => validSkillNames.includes(name));
+
+  // Write plugin.json (SDK standard fields only)
+  const config: PluginConfig = {
+    name: 'goodable-skills',
+    description: 'Goodable managed skills',
+    version: '1.0.0',
+    skills: enabledSkillPaths,
+  };
+  await writePluginConfig(config);
+
+  // Write extended config file (internal tracking)
+  const extendedConfig: SkillExtendedConfig = {
+    disabledSkills: validDisabledSkills.length > 0 ? validDisabledSkills : undefined,
+    builtinVersion: builtinVersion || existingConfig.builtinVersion,
+  };
+  await writeSkillExtendedConfig(extendedConfig);
+
+  console.log(`[SkillService] Updated plugin.json: ${enabledSkillPaths.length} enabled, ${validDisabledSkills.length} disabled`);
+}
 
 /**
  * Copy directory recursively, skip node_modules
@@ -79,21 +238,25 @@ async function ensureSkillInUserDir(builtinSkillPath: string, skillName: string)
 
 /**
  * Initialize all builtin skills to user-skills directory
- * Called on app startup, only runs once per process
+ * Only runs on first install or when app version changes
  */
 export async function initializeBuiltinSkills(): Promise<void> {
-  // Skip if already initialized in this process
-  if (builtinSkillsInitialized) {
+  // Check if builtin skills need to be copied (version check from extended config)
+  const currentVersion = getAppVersion();
+  const extendedConfig = await readSkillExtendedConfig();
+
+  if (extendedConfig.builtinVersion === currentVersion) {
+    console.log(`[SkillService] Builtin skills already initialized for version ${currentVersion}`);
     return;
   }
 
   if (!fsSync.existsSync(SKILLS_DIR_ABSOLUTE)) {
     console.log('[SkillService] Builtin skills directory not found, skipping initialization');
-    builtinSkillsInitialized = true;
     return;
   }
 
   try {
+    console.log(`[SkillService] Initializing builtin skills for version ${currentVersion}...`);
     const entries = await fs.readdir(SKILLS_DIR_ABSOLUTE, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
@@ -106,9 +269,61 @@ export async function initializeBuiltinSkills(): Promise<void> {
       }
     }
     console.log('[SkillService] Builtin skills initialization completed');
-    builtinSkillsInitialized = true;
+
+    // Update plugin.json with version marker
+    await validateAndUpdatePluginJson(currentVersion);
   } catch (error) {
     console.error('[SkillService] Error initializing builtin skills:', error);
+  }
+}
+
+/**
+ * Initialize skills on app startup
+ * - Copy builtin skills to user directory (first time or version upgrade)
+ * - Validate and update plugin.json
+ * Uses global singleton to ensure only runs once per process
+ */
+export async function initializeSkillsOnStartup(): Promise<void> {
+  // Skip during Next.js build phase
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return;
+  }
+
+  // Return cached promise if already initializing
+  if (globalForSkills.skillsInitPromise) {
+    return globalForSkills.skillsInitPromise;
+  }
+
+  // Skip if already initialized
+  if (globalForSkills.skillsInitialized) {
+    return;
+  }
+
+  // Start initialization
+  globalForSkills.skillsInitPromise = (async () => {
+    try {
+      await initializeBuiltinSkills();
+      // Always validate plugin.json on startup to fix any inconsistencies
+      await validateAndUpdatePluginJson();
+      globalForSkills.skillsInitialized = true;
+      console.log('[SkillService] Skills initialization completed');
+    } catch (error) {
+      console.error('[SkillService] Skills initialization failed:', error);
+    } finally {
+      globalForSkills.skillsInitPromise = undefined;
+    }
+  })();
+
+  return globalForSkills.skillsInitPromise;
+}
+
+/**
+ * Ensure skills are initialized before use
+ * Call this at the start of any exported function that needs skills
+ */
+async function ensureInitialized(): Promise<void> {
+  if (!globalForSkills.skillsInitialized) {
+    await initializeSkillsOnStartup();
   }
 }
 
@@ -173,6 +388,9 @@ async function scanSkillsFromDir(
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
+      // Skip irrelevant directories
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name.startsWith('.')) continue;
+
       const skillPath = path.join(dirPath, entry.name);
       const parsed = await parseSkillMd(skillPath);
 
@@ -200,6 +418,8 @@ async function scanSkillsFromDir(
  * User skills override builtin skills with same name
  */
 export async function getAllSkills(): Promise<SkillMeta[]> {
+  await ensureInitialized();
+
   // Scan builtin skills
   const builtinSkills = await scanSkillsFromDir(SKILLS_DIR_ABSOLUTE, 'builtin');
 
@@ -276,6 +496,10 @@ export async function importSkill(sourcePath: string): Promise<SkillMeta> {
   }
 
   const size = await getDirSize(skillDir);
+
+  // Update plugin.json to include the new skill
+  await validateAndUpdatePluginJson();
+
   return {
     name: parsed.name,
     description: parsed.description,
@@ -348,59 +572,23 @@ export async function deleteSkill(skillName: string): Promise<void> {
   }
 
   await fs.rm(skill.path, { recursive: true, force: true });
+
+  // Update plugin.json to remove the deleted skill
+  await validateAndUpdatePluginJson();
 }
 
 /**
  * Get skill paths for SDK plugins configuration
- * All skills in user-skills directory are enabled by default
- * Creates plugin wrapper with .claude-plugin/marketplace.json
+ * Reads from plugin.json (managed by validateAndUpdatePluginJson)
  */
 export async function getEnabledSkillPaths(): Promise<string[]> {
-  const skills = await getAllSkills();
-  // Only use skills from user-skills directory (where builtin skills are copied to)
-  const userSkills = skills.filter(s => s.source === 'user');
+  await ensureInitialized();
 
-  if (userSkills.length === 0) {
+  // Read from plugin.json instead of regenerating every time
+  const config = await readPluginConfig();
+  if (!config || config.skills.length === 0) {
     return [];
   }
-
-  // Create plugin wrapper directory
-  const wrapperDir = path.join(USER_SKILLS_DIR_ABSOLUTE, '.claude-plugin');
-
-  // Ensure directory exists
-  await fs.mkdir(wrapperDir, { recursive: true });
-
-  // Build relative paths using actual directory names (from skill.path)
-  const skillsRelativePaths = userSkills.map(skill => {
-    const dirName = path.basename(skill.path);
-    return `./${dirName}`;
-  });
-
-  // Create marketplace.json
-  const manifest = {
-    name: 'goodable-skills',
-    metadata: {
-      description: 'Goodable managed skills',
-      version: '1.0.0'
-    },
-    plugins: [
-      {
-        name: 'skills',
-        description: 'User enabled skills',
-        source: './',
-        strict: false,
-        skills: skillsRelativePaths
-      }
-    ]
-  };
-
-  await fs.writeFile(
-    path.join(wrapperDir, 'marketplace.json'),
-    JSON.stringify(manifest, null, 2),
-    'utf-8'
-  );
-
-  console.log(`[SkillService] Created plugin wrapper with ${userSkills.length} skills:`, skillsRelativePaths);
 
   // Return user-skills directory (parent of .claude-plugin)
   return [USER_SKILLS_DIR_ABSOLUTE];
@@ -424,4 +612,61 @@ export async function getSkillDetail(skillName: string): Promise<{ meta: SkillMe
   } catch {
     return null;
   }
+}
+
+/**
+ * Toggle skill enabled/disabled status
+ */
+export async function toggleSkill(skillName: string, enabled: boolean): Promise<void> {
+  const config = await readPluginConfig();
+  if (!config) {
+    throw new Error('Plugin config not found');
+  }
+
+  const extendedConfig = await readSkillExtendedConfig();
+  const disabledSkills = extendedConfig.disabledSkills || [];
+  const skillPath = `./${skillName}`;
+
+  if (enabled) {
+    // Enable: remove from disabled list, add to skills array
+    const newDisabled = disabledSkills.filter(name => name !== skillName);
+    if (!config.skills.includes(skillPath)) {
+      config.skills.push(skillPath);
+    }
+    extendedConfig.disabledSkills = newDisabled.length > 0 ? newDisabled : undefined;
+  } else {
+    // Disable: add to disabled list, remove from skills array
+    if (!disabledSkills.includes(skillName)) {
+      disabledSkills.push(skillName);
+    }
+    config.skills = config.skills.filter(p => p !== skillPath);
+    extendedConfig.disabledSkills = disabledSkills;
+  }
+
+  await writePluginConfig(config);
+  await writeSkillExtendedConfig(extendedConfig);
+  console.log(`[SkillService] Skill ${skillName} ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+/**
+ * Check if a skill is enabled
+ */
+export async function isSkillEnabled(skillName: string): Promise<boolean> {
+  const extendedConfig = await readSkillExtendedConfig();
+  const disabledSkills = extendedConfig.disabledSkills || [];
+  return !disabledSkills.includes(skillName);
+}
+
+/**
+ * Get all skills with enabled status
+ */
+export async function getAllSkillsWithStatus(): Promise<(SkillMeta & { enabled: boolean })[]> {
+  const skills = await getAllSkills();
+  const extendedConfig = await readSkillExtendedConfig();
+  const disabledSkills = extendedConfig.disabledSkills || [];
+
+  return skills.map(skill => ({
+    ...skill,
+    enabled: !disabledSkills.includes(skill.name),
+  }));
 }

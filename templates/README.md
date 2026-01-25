@@ -1,3 +1,24 @@
+# ⚠️ DEPRECATED - Template System
+
+**This directory and documentation are deprecated as of 2026-01-24.**
+
+The template system has been merged into the unified skills system. All app templates have been moved to the `skills/` directory.
+
+## Migration Notice
+
+- **Old location**: `templates/`
+- **New location**: `skills/`
+- **New documentation**: See `skills/README.md` for the unified skills integration guide
+
+## App Template Specifications
+
+For technical specifications of runnable applications, see:
+
+- **[Next.js App Specification](../skills/README-nextjs-app.md)** - Requirements for Next.js 15+ applications
+- **[Python FastAPI App Specification](../skills/README-python-app.md)** - Requirements for Python FastAPI applications
+
+---
+
 # 模板目录使用说明
 
 本目录用于存放项目模板。用户可以从模板快速创建新项目。

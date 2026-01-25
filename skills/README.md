@@ -74,6 +74,24 @@ Skills directory supports two types:
 
 When both files exist, `template.json` takes priority for metadata (displayName, description, etc.).
 
+## App Template Specifications
+
+For runnable application templates (BS architecture), see detailed technical specifications:
+
+- **[Next.js App Specification](./README-nextjs-app.md)** - Requirements for Next.js 15+ applications
+  - Required files and directory structure
+  - Installation flow and retry mechanism
+  - Preview flow and health checks
+  - Environment variables and database security
+  - Project cleanup checklist
+
+- **[Python FastAPI App Specification](./README-python-app.md)** - Requirements for Python FastAPI applications
+  - Required files and main.py structure
+  - Virtual environment and dependency installation
+  - Preview flow and health checks
+  - Database configuration and security
+  - Dependency package restrictions
+
 ## template.json Format (App Template)
 
 For runnable applications (BS architecture):

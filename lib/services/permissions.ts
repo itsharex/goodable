@@ -50,8 +50,8 @@ const EDIT_TOOLS = new Set([
   'NotebookEdit',
 ]);
 
-// Permission timeout in milliseconds (30 seconds)
-const PERMISSION_TIMEOUT_MS = 30000;
+// Permission timeout in milliseconds (24 hours - effectively no auto-timeout)
+const PERMISSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 // Poll interval for checking permission status (100ms)
 const POLL_INTERVAL_MS = 100;

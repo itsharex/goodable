@@ -34,6 +34,7 @@ export default function EmployeeFormModal({
   const [systemPromptExecution, setSystemPromptExecution] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isEditing = !!employee;
   const isBuiltin = employee?.is_builtin ?? false;
@@ -61,6 +62,7 @@ export default function EmployeeFormModal({
         setSystemPromptExecution('');
       }
       setError('');
+      setShowDeleteConfirm(false);
     }
   }, [open, employee]);
 
@@ -130,6 +132,32 @@ export default function EmployeeFormModal({
       setError('保存失败，请重试');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!employee) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/employees/${employee.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.error || '删除失败');
+        return;
+      }
+
+      onSave(); // Trigger list refresh and close modal
+    } catch (err) {
+      setError('删除失败，请重试');
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -317,21 +345,59 @@ export default function EmployeeFormModal({
         </form>
 
         {/* Footer - fixed at bottom */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? '保存中...' : '保存'}
-          </button>
+        <div className="flex justify-between items-center gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+          {/* Delete button - left side */}
+          <div>
+            {isEditing && !isBuiltin && !showDeleteConfirm && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={loading}
+                className="px-4 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                删除
+              </button>
+            )}
+            {showDeleteConfirm && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">确定删除？</span>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  确定
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={loading}
+                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Cancel and Save buttons - right side */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '保存中...' : '保存'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

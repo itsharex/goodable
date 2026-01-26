@@ -478,7 +478,17 @@ function getSkillsDirectory(): string {
     }
   }
 
-  // Priority 2: Electron's process.resourcesPath (production)
+  // Priority 2: GOODABLE_RESOURCES_PATH (passed from Electron main to standalone subprocess)
+  const resourcesPath = process.env.GOODABLE_RESOURCES_PATH;
+  if (resourcesPath) {
+    const skillsPath = path.join(resourcesPath, 'skills');
+    if (fs.existsSync(skillsPath)) {
+      console.log(`[PathConfig] ✅ Builtin skills via GOODABLE_RESOURCES_PATH: ${skillsPath}`);
+      return skillsPath;
+    }
+  }
+
+  // Priority 3: Electron's process.resourcesPath (production)
   const electronResourcesPath = (process as any).resourcesPath as string | undefined;
   if (electronResourcesPath && fs.existsSync(electronResourcesPath)) {
     const skillsPath = path.join(electronResourcesPath, 'skills');
@@ -488,7 +498,7 @@ function getSkillsDirectory(): string {
     }
   }
 
-  // Priority 3: Development fallback - use skills/ in project root
+  // Priority 4: Development fallback - use skills/ in project root
   const skillsPath = path.join(process.cwd(), 'skills');
 
   try {

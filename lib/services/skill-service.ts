@@ -527,7 +527,8 @@ async function scanSkillsFromDir(
       const parsed = await parseSkillDir(skillPath, entry.name);
 
       if (parsed) {
-        const size = await getDirSize(skillPath);
+        // Skip size calculation for performance (can be slow with node_modules)
+        const size = 0;
         skills.push({
           name: entry.name,
           displayName: parsed.displayName,

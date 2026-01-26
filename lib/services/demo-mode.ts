@@ -321,11 +321,15 @@ async function loadMessagesFromDatabase(sourceProjectId: string): Promise<MockMe
 }
 
 /**
- * 复制目录（递归）
+ * Copy directory recursively, skip .venv, node_modules, __pycache__
  */
 async function copyDirectory(src: string, dest: string): Promise<void> {
   const entries = await fs.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
+    // Skip virtual env and build artifacts
+    if (entry.name === '.venv' || entry.name === 'node_modules' || entry.name === '__pycache__') {
+      continue;
+    }
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {

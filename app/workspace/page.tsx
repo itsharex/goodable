@@ -735,7 +735,7 @@ function WorkspaceContent() {
                 Goodable
               </h1>
               <p className="text-sm sm:text-base text-gray-600 mb-6 text-center">
-                专门为超级个体打造的桌面智能体应用，内置 18 个数字员工，一个人就是一支队伍。
+                专门为超级个体打造的桌面AI工作台，一个人就是一支队伍。
               </p>
               <ChatInput
                 onSendMessage={handleCreateProject}

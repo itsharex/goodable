@@ -117,6 +117,7 @@
       "**/@anthropic-ai/claude-agent-sdk/cli.js",
       "**/@anthropic-ai/claude-agent-sdk/**/*.wasm"
     ],
+    "beforePack": "node scripts/download-tiktok-downloader.js",
     "extraResources": [
       {
         "from": ".next/standalone",

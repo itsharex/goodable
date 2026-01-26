@@ -22,3 +22,8 @@ data/*.db-journal
 # Uploaded images cache
 data/images/
 
+
+*.db
+*.sqlite
+*.sqlite3
+.env.local

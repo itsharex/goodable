@@ -13,7 +13,7 @@
       "label": "微信公众号 App ID",
       "required": true,
       "secret": false,
-      "placeholder": "wx1234567890abcdef"
+      "placeholder": "请输入微信公众号 App ID"
     },
     {
       "key": "WECHAT_APP_SECRET",

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Copy, Check, FolderOpen, FileText, Settings, Eye, EyeOff, Play, GitFork } from 'lucide-react';
 import type { SkillMeta, EnvVarConfig, FileTreeNode } from '@/lib/services/skill-service';
+import { useToast } from '@/contexts/ToastContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
@@ -25,10 +26,10 @@ export default function SkillDetailPanel({
   onForkSkill,
   onDeleteSkill,
 }: SkillDetailPanelProps) {
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>({});
 
@@ -89,7 +90,6 @@ export default function SkillDetailPanel({
       setSkillMdContent(null);
       setEnvValues({});
       setError('');
-      setMessage(null);
       setVisibleSecrets({});
     }
   }, [open]);
@@ -99,7 +99,6 @@ export default function SkillDetailPanel({
     if (!skillName) return;
 
     setSaving(true);
-    setMessage(null);
 
     try {
       const response = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skillName)}/env`, {
@@ -111,16 +110,15 @@ export default function SkillDetailPanel({
       const data = await response.json();
 
       if (data.success) {
-        setMessage({ type: 'success', text: '保存成功' });
+        toast.success('保存成功');
         onEnvSaved?.();
       } else {
-        setMessage({ type: 'error', text: data.error || '保存失败' });
+        toast.error(data.error || '保存失败');
       }
     } catch (err) {
-      setMessage({ type: 'error', text: '保存失败' });
+      toast.error('保存失败');
     } finally {
       setSaving(false);
-      setTimeout(() => setMessage(null), 2000);
     }
   };
 
@@ -249,17 +247,6 @@ export default function SkillDetailPanel({
                     <Settings className="w-4 h-4 text-gray-500" />
                     <h3 className="text-sm font-medium text-gray-900">环境变量配置</h3>
                   </div>
-
-                  {/* Message */}
-                  {message && (
-                    <div
-                      className={`px-3 py-2 rounded text-sm ${
-                        message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                      }`}
-                    >
-                      {message.text}
-                    </div>
-                  )}
 
                   {/* Env var inputs */}
                   <div className="space-y-3">

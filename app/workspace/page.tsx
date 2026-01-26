@@ -9,11 +9,12 @@ import ChatInput from '@/components/chat/ChatInput';
 import EmployeeDropdown from '@/components/employees/EmployeeDropdown';
 import EmployeeList from '@/components/employees/EmployeeList';
 import SkillDetailPanel from '@/components/skills/SkillDetailPanel';
-import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users, Sparkles } from 'lucide-react';
+import { Folder, FolderOpen, HelpCircle, ShoppingBag, CheckCircle, FileText, Receipt, Users, Sparkles, AlertTriangle } from 'lucide-react';
 import { useGlobalSettings } from '@/contexts/GlobalSettingsContext';
 import { useSlimMode } from '@/hooks/useSlimMode';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 import type { Employee } from '@/types/backend/employee';
+import { useToast } from '@/contexts/ToastContext';
 import {
   ACTIVE_CLI_MODEL_OPTIONS,
   DEFAULT_ACTIVE_CLI,
@@ -68,11 +69,14 @@ interface SkillMeta {
   // Capability flags
   hasSkill: boolean;
   hasApp: boolean;
+  // Runtime check
+  hasUnfilledRequiredVars?: boolean;
 }
 
 function WorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
   const viewParam = searchParams?.get('view') as 'home' | 'templates' | 'apps' | 'employees' | 'skills' | 'help' | null;
   const employeeIdParam = searchParams?.get('employee_id');
   const autoSendParam = searchParams?.get('auto_send') === 'true';
@@ -179,7 +183,6 @@ function WorkspaceContent() {
   // Skills state
   const [skills, setSkills] = useState<SkillMeta[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
-  const [skillsMessage, setSkillsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [importPath, setImportPath] = useState('');
   const [importing, setImporting] = useState(false);
   const [selectedSkillName, setSelectedSkillName] = useState<string | null>(null);
@@ -242,7 +245,28 @@ function WorkspaceContent() {
       const response = await fetch(`${API_BASE}/api/skills`);
       if (response.ok) {
         const data = await response.json();
-        setSkills(data.data || []);
+        const skillsData = data.data || [];
+
+        // Check env vars for each skill with required fields
+        const skillsWithEnvCheck = await Promise.all(
+          skillsData.map(async (skill: SkillMeta) => {
+            const requiredVars = skill.envVars?.filter(v => v.required) || [];
+            if (requiredVars.length > 0) {
+              try {
+                const envResponse = await fetch(`${API_BASE}/api/skills/${encodeURIComponent(skill.name)}/env`);
+                const envData = await envResponse.json();
+                const envValues = envData.success ? envData.data : {};
+                const missingVars = requiredVars.filter(v => !envValues[v.key]);
+                return { ...skill, hasUnfilledRequiredVars: missingVars.length > 0 };
+              } catch (error) {
+                return { ...skill, hasUnfilledRequiredVars: true };
+              }
+            }
+            return { ...skill, hasUnfilledRequiredVars: false };
+          })
+        );
+
+        setSkills(skillsWithEnvCheck);
       }
     } catch (error) {
       console.error('Failed to load skills:', error);
@@ -260,15 +284,14 @@ function WorkspaceContent() {
       });
       if (response.ok) {
         setSkills(prev => prev.filter(s => s.name !== skillName));
-        setSkillsMessage({ type: 'success', text: '已删除' });
+        toast.success('已删除');
       } else {
         const data = await response.json();
-        setSkillsMessage({ type: 'error', text: data.error || '删除失败' });
+        toast.error(data.error || '删除失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '删除失败' });
+      toast.error('删除失败');
     }
-    setTimeout(() => setSkillsMessage(null), 2000);
   };
 
   // Toggle skill enabled/disabled
@@ -286,12 +309,8 @@ function WorkspaceContent() {
 
           const missingVars = requiredEnvVars.filter(v => !envValues[v.key]);
           if (missingVars.length > 0) {
-            setSkillsMessage({
-              type: 'error',
-              text: `请先设置必填环境变量: ${missingVars.map(v => v.label || v.key).join(', ')}`
-            });
+            toast.warning(`请先设置必填环境变量: ${missingVars.map(v => v.label || v.key).join(', ')}`);
             setSelectedSkillName(skillName); // Open detail panel
-            setTimeout(() => setSkillsMessage(null), 3000);
             return;
           }
         } catch (error) {
@@ -308,15 +327,14 @@ function WorkspaceContent() {
       });
       if (response.ok) {
         setSkills(prev => prev.map(s => s.name === skillName ? { ...s, enabled } : s));
-        setSkillsMessage({ type: 'success', text: enabled ? '已启用' : '已禁用' });
+        toast.success(enabled ? '已启用' : '已禁用');
       } else {
         const data = await response.json();
-        setSkillsMessage({ type: 'error', text: data.error || '操作失败' });
+        toast.error(data.error || '操作失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '操作失败' });
+      toast.error('操作失败');
     }
-    setTimeout(() => setSkillsMessage(null), 2000);
   };
 
   // Run skill as app
@@ -329,12 +347,10 @@ function WorkspaceContent() {
       if (data.success && data.data?.projectId) {
         router.push(`/${data.data.projectId}/chat`);
       } else {
-        setSkillsMessage({ type: 'error', text: data.error || '运行失败' });
-        setTimeout(() => setSkillsMessage(null), 2000);
+        toast.error(data.error || '运行失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '运行失败' });
-      setTimeout(() => setSkillsMessage(null), 2000);
+      toast.error('运行失败');
     }
   };
 
@@ -348,12 +364,10 @@ function WorkspaceContent() {
       if (data.success && data.data?.projectId) {
         router.push(`/${data.data.projectId}/chat`);
       } else {
-        setSkillsMessage({ type: 'error', text: data.error || '二开失败' });
-        setTimeout(() => setSkillsMessage(null), 2000);
+        toast.error(data.error || '二开失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '二开失败' });
-      setTimeout(() => setSkillsMessage(null), 2000);
+      toast.error('二开失败');
     }
   };
 
@@ -369,18 +383,17 @@ function WorkspaceContent() {
       });
       const data = await response.json();
       if (response.ok) {
-        setSkillsMessage({ type: 'success', text: '导入成功' });
+        toast.success('导入成功');
         setImportPath('');
         await loadSkills();
       } else {
-        setSkillsMessage({ type: 'error', text: data.error || '导入失败' });
+        toast.error(data.error || '导入失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '导入失败' });
+      toast.error('导入失败');
     } finally {
       setImporting(false);
     }
-    setTimeout(() => setSkillsMessage(null), 3000);
   };
 
   // Import skill from ZIP file upload
@@ -391,8 +404,7 @@ function WorkspaceContent() {
     event.target.value = '';
 
     if (!file.name.endsWith('.zip')) {
-      setSkillsMessage({ type: 'error', text: '只支持 .zip 格式文件' });
-      setTimeout(() => setSkillsMessage(null), 3000);
+      toast.error('只支持 .zip 格式文件');
       return;
     }
 
@@ -407,17 +419,16 @@ function WorkspaceContent() {
       });
       const data = await response.json();
       if (response.ok) {
-        setSkillsMessage({ type: 'success', text: '导入成功' });
+        toast.success('导入成功');
         await loadSkills();
       } else {
-        setSkillsMessage({ type: 'error', text: data.error || '导入失败' });
+        toast.error(data.error || '导入失败');
       }
     } catch (error) {
-      setSkillsMessage({ type: 'error', text: '导入失败' });
+      toast.error('导入失败');
     } finally {
       setImporting(false);
     }
-    setTimeout(() => setSkillsMessage(null), 3000);
   };
 
   // Format file size
@@ -1451,11 +1462,6 @@ function WorkspaceContent() {
                     })}
                   </>
                 )}
-                {skillsMessage && (
-                  <span className={`text-sm ${skillsMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                    {skillsMessage.text}
-                  </span>
-                )}
                 <input
                   type="file"
                   id="skill-import-input"
@@ -1551,6 +1557,19 @@ function WorkspaceContent() {
                     </div>
                     {/* Action buttons row */}
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {/* Warning icon if has unfilled required env vars */}
+                      {skill.hasUnfilledRequiredVars && (
+                        <span
+                          className="relative group/warning cursor-help"
+                          title="有必填的环境变量未配置"
+                        >
+                          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                          {/* Tooltip on hover */}
+                          <span className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/warning:opacity-100 transition-opacity pointer-events-none z-10">
+                            有必填的环境变量未配置
+                          </span>
+                        </span>
+                      )}
                       {/* Toggle switch (hasSkill only, always visible) */}
                       {skill.hasSkill && (
                         <button

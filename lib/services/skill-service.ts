@@ -635,7 +635,21 @@ export async function importSkill(sourcePath: string): Promise<SkillMeta> {
 
   const size = await getDirSize(skillDir);
 
+  // Check if skill has required env vars - if yes, disable by default
+  const hasRequiredEnvVars = parsedDir.envVars?.some(v => v.required) || false;
+
   // Update plugin.json to include the new skill (only if hasSkill)
+  // If hasRequiredEnvVars, it will be disabled by default
+  if (hasRequiredEnvVars && parsedDir.hasSkill) {
+    const extendedConfig = await readSkillExtendedConfig();
+    const disabledSkills = extendedConfig.disabledSkills || [];
+    if (!disabledSkills.includes(dirName)) {
+      disabledSkills.push(dirName);
+      extendedConfig.disabledSkills = disabledSkills;
+      await writeSkillExtendedConfig(extendedConfig);
+    }
+  }
+
   await validateAndUpdatePluginJson();
 
   return {

@@ -275,9 +275,8 @@ async def publish_article_api(article_id: int, db: Session = Depends(get_db)):
     if not db_article.title or not db_article.author:
         raise HTTPException(status_code=400, detail="Title and author are required")
 
-    # For now, allow publishing without cover (will fail at WeChat API if required)
-    # if not db_article.thumb_media_id:
-    #     raise HTTPException(status_code=400, detail="Cover image is required")
+    if not db_article.thumb_media_id:
+        raise HTTPException(status_code=400, detail="Cover image is required for publishing")
 
     if not db_article.content_html:
         raise HTTPException(status_code=400, detail="Content is required. Please save the article first.")

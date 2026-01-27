@@ -432,6 +432,8 @@ export default function ChatPage() {
   const [currentTodos, setCurrentTodos] = useState<Array<{ content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm?: string }>>([]);
   const [fileChanges, setFileChanges] = useState<Array<{ type: 'write' | 'edit'; filePath: string; content?: string; oldString?: string; newString?: string; timestamp: string }>>([]);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ requestId: string } | null>(null);
+  const [mobileViewMode, setMobileViewMode] = useState<'chat' | 'preview'>('chat');
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PendingPermission[]>([]);
   const approvedRequestIdsRef = useRef<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -2653,6 +2655,19 @@ const persistProjectPreferences = useCallback(
     }
   }, [globalSettings, usingGlobalDefaults, updatePreferredCli, updateSelectedModel]);
 
+  // Detect mobile device (simple width check)
+  useEffect(() => {
+    const checkMobile = () => {
+      if (typeof window === 'undefined') return;
+      const isMobile = window.innerWidth < 768;
+      setIsMobileDevice(isMobile);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
 
   // Show loading UI if project is initializing
 
@@ -2762,14 +2777,44 @@ const persistProjectPreferences = useCallback(
           }}
         />
 
-        <div className="h-full flex-1 flex min-w-0 overflow-hidden">
+        <div className="h-full flex-1 flex min-w-0 overflow-hidden relative">
+          {/* Mobile view toggle - fixed at top, always visible */}
+          {isMobileDevice && (
+            <div className="absolute top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-center gap-1">
+              <button
+                onClick={() => setMobileViewMode('chat')}
+                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mobileViewMode === 'chat'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                聊天
+              </button>
+              <button
+                onClick={() => setMobileViewMode('preview')}
+                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mobileViewMode === 'preview'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                预览
+              </button>
+            </div>
+          )}
+
           {/* Left: Chat window or Main Content */}
           <div
             style={{
-              width: currentView === 'chat'
-                ? (previewMode === 'fullscreen' ? '0' : previewMode === 'mobile' ? '60%' : '35%')
-                : '100%',
-              overflow: previewMode === 'fullscreen' ? 'hidden' : undefined
+              width: isMobileDevice
+                ? (mobileViewMode === 'chat' ? '100%' : '0')
+                : (currentView === 'chat'
+                  ? (previewMode === 'fullscreen' ? '0' : previewMode === 'mobile' ? '60%' : '35%')
+                  : '100%'),
+              display: isMobileDevice && mobileViewMode === 'preview' ? 'none' : undefined,
+              overflow: previewMode === 'fullscreen' ? 'hidden' : undefined,
+              paddingTop: isMobileDevice ? '52px' : undefined
             }}
             className="h-full border-r border-gray-200 flex flex-col min-w-0 flex-shrink-0 overflow-hidden transition-all duration-300 chat-panel-responsive"
           >
@@ -2797,7 +2842,7 @@ const persistProjectPreferences = useCallback(
                 </span>
               </div>
             </div>
-            
+
             {/* Chat log area */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <ChatErrorBoundary>
@@ -3100,7 +3145,11 @@ const persistProjectPreferences = useCallback(
             <div
               className="h-full flex flex-col bg-gray-50 min-w-0 flex-shrink-0 overflow-hidden transition-all duration-300 preview-panel-responsive"
               style={{
-                width: previewMode === 'fullscreen' ? '100%' : previewMode === 'mobile' ? '40%' : '65%',
+                width: isMobileDevice
+                  ? (mobileViewMode === 'preview' ? '100%' : '0')
+                  : (previewMode === 'fullscreen' ? '100%' : previewMode === 'mobile' ? '40%' : '65%'),
+                display: isMobileDevice && mobileViewMode === 'chat' ? 'none' : undefined,
+                paddingTop: isMobileDevice ? '52px' : undefined
               }}
             >
             {/* Content area */}
@@ -3108,7 +3157,8 @@ const persistProjectPreferences = useCallback(
               {/* Controls Bar */}
               <div className="bg-white border-b border-gray-200 px-3 h-12 flex items-center relative">
                 <div className="flex items-center gap-2">
-                  {/* Preview Mode Toggle */}
+                  {/* Preview Mode Toggle - hide on mobile */}
+                  {!isMobileDevice && (
                   <div className="h-8 flex items-center gap-0.5 bg-gray-100 rounded-lg px-0.5 border border-gray-200">
                     <button
                       aria-label="全屏模式"
@@ -3147,6 +3197,7 @@ const persistProjectPreferences = useCallback(
                       <Smartphone size={14} />
                     </button>
                   </div>
+                  )}
 
                   {/* Toggle switch */}
                   <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
@@ -3244,8 +3295,8 @@ const persistProjectPreferences = useCallback(
                     )}
                   </div>
 
-                  {/* Center Controls - Only show when preview URL is available */}
-                  {showPreview && previewUrl && (
+                  {/* Center Controls - Only show when preview URL is available and not mobile */}
+                  {showPreview && previewUrl && !isMobileDevice && (
                     <div className="flex items-center gap-2">
                       {/* Route Navigation */}
                       <div className="h-8 flex items-center bg-gray-100 rounded-lg px-2 border border-gray-200 ">
@@ -3470,80 +3521,124 @@ const persistProjectPreferences = useCallback(
                   >
                 {previewUrl ? (
                   <div className="relative w-full h-full bg-gray-100 flex items-center justify-center">
-                    <div className="bg-white w-full h-full overflow-hidden">
-                      {previewError && (
-                        <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 shadow">
-                          <span className="text-sm truncate flex-1 min-w-0">{previewError}</span>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700"
-                              onClick={() => {
-                                try {
-                                  const guidance = `错误摘要：${previewError}\n请先查看后端日志：projects/${projectId}/logs/timeline.txt（最近200行），并据此给出修复建议。`;
-                                  if (inputControlRefGlobal?.control) {
-                                    inputControlRefGlobal.control.setMessage(guidance);
-                                  }
-                                } catch {}
-                              }}
-                            >复制到聊天框</button>
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              onClick={() => setPreviewError(null)}
-                            >关闭</button>
-                          </div>
+                    {/* Mobile: Show open button instead of iframe */}
+                    {isMobileDevice ? (
+                      <div className="flex flex-col items-center justify-center p-8 text-center">
+                        <div className="w-20 h-20 mb-6 flex items-center justify-center bg-white rounded-full shadow-lg">
+                          <Monitor size={40} className="text-gray-700" />
                         </div>
-                      )}
-                      <iframe
-                        key={`${previewUrl || 'empty'}-${previewInstanceId ?? 0}`}
-                        ref={iframeRef}
-                        className="w-full h-full border-none bg-white "
-                        src={previewUrl || ''}
-                        onError={() => {
-                          // Show error overlay
-                          const overlay = document.getElementById('iframe-error-overlay');
-                          if (overlay) overlay.style.display = 'flex';
-                        }}
-                        onLoad={() => {
-                          // Hide error overlay when loaded successfully
-                          const overlay = document.getElementById('iframe-error-overlay');
-                          if (overlay) overlay.style.display = 'none';
-                        }}
-                      />
-                      
-                      {/* Error overlay */}
-                    <div 
-                      id="iframe-error-overlay"
-                      className="absolute inset-0 bg-gray-50 flex items-center justify-center z-10"
-                      style={{ display: 'none' }}
-                    >
-                      <div className="text-center max-w-md mx-auto p-6">
-                        <div className="text-4xl mb-4">🔄</div>
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                          Connection Issue
+                        <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                          预览已就绪
                         </h3>
-                        <p className="text-gray-600 mb-4">
-                          The preview couldn&apos;t load properly. Try clicking the refresh button to reload the page.
+                        <p className="text-gray-600 mb-6 max-w-xs">
+                          在新窗口中打开预览页面
                         </p>
                         <button
-                          className="flex items-center gap-2 mx-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                           onClick={() => {
-                            const iframe = document.querySelector('iframe');
-                            if (iframe) {
-                              iframe.src = iframe.src;
+                            if (previewUrl) {
+                              try {
+                                // Replace localhost with current hostname (for LAN access on mobile)
+                                const previewUrlObj = new URL(previewUrl);
+                                previewUrlObj.hostname = window.location.hostname;
+                                window.open(previewUrlObj.toString(), '_blank');
+                              } catch {
+                                // Fallback to original URL if parsing fails
+                                window.open(previewUrl, '_blank');
+                              }
                             }
+                          }}
+                          className="px-6 py-3 bg-black hover:bg-gray-900 text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-md"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                            <polyline points="15 3 21 3 21 9" />
+                            <line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                          在浏览器中打开
+                        </button>
+                        {previewError && (
+                          <div className="mt-4 px-4 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 text-sm max-w-xs">
+                            {previewError}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Desktop: Show iframe as before */
+                      <div className="bg-white w-full h-full overflow-hidden">
+                        {previewError && (
+                          <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-red-200 bg-red-50 text-red-700 shadow">
+                            <span className="text-sm truncate flex-1 min-w-0">{previewError}</span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-red-600 text-white hover:bg-red-700"
+                                onClick={() => {
+                                  try {
+                                    const guidance = `错误摘要：${previewError}\n请先查看后端日志：projects/${projectId}/logs/timeline.txt（最近200行），并据此给出修复建议。`;
+                                    if (inputControlRefGlobal?.control) {
+                                      inputControlRefGlobal.control.setMessage(guidance);
+                                    }
+                                  } catch {}
+                                }}
+                              >复制到聊天框</button>
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                onClick={() => setPreviewError(null)}
+                              >关闭</button>
+                            </div>
+                          </div>
+                        )}
+                        <iframe
+                          key={`${previewUrl || 'empty'}-${previewInstanceId ?? 0}`}
+                          ref={iframeRef}
+                          className="w-full h-full border-none bg-white "
+                          src={previewUrl || ''}
+                          onError={() => {
+                            // Show error overlay
+                            const overlay = document.getElementById('iframe-error-overlay');
+                            if (overlay) overlay.style.display = 'flex';
+                          }}
+                          onLoad={() => {
+                            // Hide error overlay when loaded successfully
                             const overlay = document.getElementById('iframe-error-overlay');
                             if (overlay) overlay.style.display = 'none';
                           }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M1 4v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          Refresh Now
-                        </button>
+                        />
+
+                        {/* Error overlay */}
+                      <div
+                        id="iframe-error-overlay"
+                        className="absolute inset-0 bg-gray-50 flex items-center justify-center z-10"
+                        style={{ display: 'none' }}
+                      >
+                        <div className="text-center max-w-md mx-auto p-6">
+                          <div className="text-4xl mb-4">🔄</div>
+                          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                            Connection Issue
+                          </h3>
+                          <p className="text-gray-600 mb-4">
+                            The preview couldn&apos;t load properly. Try clicking the refresh button to reload the page.
+                          </p>
+                          <button
+                            className="flex items-center gap-2 mx-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                            onClick={() => {
+                              const iframe = document.querySelector('iframe');
+                              if (iframe) {
+                                iframe.src = iframe.src;
+                              }
+                              const overlay = document.getElementById('iframe-error-overlay');
+                              if (overlay) overlay.style.display = 'none';
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M1 4v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Refresh Now
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="h-full w-full flex items-center justify-center bg-gray-50 relative">

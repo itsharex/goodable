@@ -1,6 +1,6 @@
 import { db, sqlite } from '@/lib/db/client';
 import { userRequests } from '@/lib/db/schema';
-import { eq, count as drizzleCount, inArray } from 'drizzle-orm';
+import { eq, count as drizzleCount, inArray, desc } from 'drizzle-orm';
 
 export interface ActiveRequestSummary {
   hasActiveRequests: boolean;
@@ -30,30 +30,42 @@ export interface ActiveTaskInfo {
 
 /**
  * Get current active task for a project (for multi-window sync)
+ * Only checks the most recent request within 5-minute window to avoid stale data
  */
 export async function getActiveTaskForProject(projectId: string): Promise<ActiveTaskInfo | null> {
   const result = await db.select({
     id: userRequests.id,
     status: userRequests.status,
     instruction: userRequests.instruction,
+    createdAt: userRequests.createdAt,
   })
     .from(userRequests)
     .where(eq(userRequests.projectId, projectId))
-    .orderBy(userRequests.createdAt)
-    .limit(10);
+    .orderBy(desc(userRequests.createdAt))
+    .limit(1);
 
-  // Find the most recent active task
+  const latestTask = result[0];
+  if (!latestTask) {
+    return null;
+  }
+
+  // Only consider active statuses
   const activeStatuses: UserRequestStatus[] = ['pending', 'processing', 'planning', 'waiting_approval', 'implementing', 'active', 'running'];
-  const activeTask = result.reverse().find(r => activeStatuses.includes(r.status as UserRequestStatus));
+  if (!activeStatuses.includes(latestTask.status as UserRequestStatus)) {
+    return null;
+  }
 
-  if (!activeTask) {
+  // 5-minute window filter to exclude stale/orphan tasks
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  const taskCreatedAt = latestTask.createdAt ? new Date(latestTask.createdAt).getTime() : 0;
+  if (taskCreatedAt < fiveMinutesAgo) {
     return null;
   }
 
   return {
-    requestId: activeTask.id,
-    status: activeTask.status as UserRequestStatus,
-    instruction: activeTask.instruction ?? undefined,
+    requestId: latestTask.id,
+    status: latestTask.status as UserRequestStatus,
+    instruction: latestTask.instruction ?? undefined,
   };
 }
 

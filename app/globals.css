@@ -288,19 +288,8 @@
   }
 }
 
-/* Slim mode responsive layout - auto-hide preview when window < 500px */
+/* Slim mode responsive layout - backup for non-JS scenarios */
 @media (max-width: 500px) {
-  /* Chat panel takes full width in slim mode */
-  .chat-panel-responsive {
-    width: 100% !important;
-  }
-
-  /* Preview panel hidden in slim mode */
-  .preview-panel-responsive {
-    width: 0 !important;
-    overflow: hidden !important;
-  }
-
   /* Hide home page suggestions area in slim mode */
   .home-suggestions-area {
     display: none !important;

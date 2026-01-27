@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { streamManager } from '@/lib/services/stream';
 import { previewManager } from '@/lib/services/preview';
-import { getActiveRequests } from '@/lib/services/user-requests';
+import { getActiveRequests, getActiveTaskForProject } from '@/lib/services/user-requests';
 
 interface RouteContext {
   params: Promise<{ project_id: string }>;
@@ -66,6 +66,22 @@ export async function GET(
             },
           })}\n\n`;
           controller.enqueue(new TextEncoder().encode(activeEvent));
+
+          // Send current active task info for multi-window sync
+          const activeTask = await getActiveTaskForProject(project_id);
+          if (activeTask) {
+            const taskEvent = `data: ${JSON.stringify({
+              type: 'task_started',
+              data: {
+                projectId: project_id,
+                requestId: activeTask.requestId,
+                timestamp: new Date().toISOString(),
+                message: 'Task in progress (sync)',
+                status: activeTask.status,
+              },
+            })}\n\n`;
+            controller.enqueue(new TextEncoder().encode(taskEvent));
+          }
         })
         .catch(() => {});
 

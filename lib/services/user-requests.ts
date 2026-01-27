@@ -22,6 +22,41 @@ export async function getActiveRequests(projectId: string): Promise<ActiveReques
   };
 }
 
+export interface ActiveTaskInfo {
+  requestId: string;
+  status: UserRequestStatus;
+  instruction?: string;
+}
+
+/**
+ * Get current active task for a project (for multi-window sync)
+ */
+export async function getActiveTaskForProject(projectId: string): Promise<ActiveTaskInfo | null> {
+  const result = await db.select({
+    id: userRequests.id,
+    status: userRequests.status,
+    instruction: userRequests.instruction,
+  })
+    .from(userRequests)
+    .where(eq(userRequests.projectId, projectId))
+    .orderBy(userRequests.createdAt)
+    .limit(10);
+
+  // Find the most recent active task
+  const activeStatuses: UserRequestStatus[] = ['pending', 'processing', 'planning', 'waiting_approval', 'implementing', 'active', 'running'];
+  const activeTask = result.reverse().find(r => activeStatuses.includes(r.status as UserRequestStatus));
+
+  if (!activeTask) {
+    return null;
+  }
+
+  return {
+    requestId: activeTask.id,
+    status: activeTask.status as UserRequestStatus,
+    instruction: activeTask.instruction ?? undefined,
+  };
+}
+
 export type UserRequestStatus =
   | 'pending'
   | 'processing'

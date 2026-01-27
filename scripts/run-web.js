@@ -21,9 +21,15 @@ dotenv.config({ path: path.join(rootDir, '.env.local') });
 function parseCliArgs(argv) {
   const passthrough = [];
   let preferredPort;
+  let remote = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+
+    if (arg === '--remote') {
+      remote = true;
+      continue;
+    }
 
     if (arg === '--port' || arg === '-p') {
       const value = argv[i + 1];
@@ -54,7 +60,7 @@ function parseCliArgs(argv) {
     passthrough.push(arg);
   }
 
-  return { preferredPort, passthrough };
+  return { preferredPort, passthrough, remote };
 }
 
 async function ensureDatabaseSynced() {
@@ -93,6 +99,7 @@ async function startWebDevServer({
   preferredPort,
   passthrough = [],
   stdio = 'inherit',
+  remote = false,
 } = {}) {
   const { port, url } = await ensureEnvironment({
     preferredPort,
@@ -107,11 +114,13 @@ async function startWebDevServer({
   process.env.WEB_PORT = resolvedPort.toString();
   process.env.NEXT_PUBLIC_APP_URL = resolvedUrl;
 
-  console.log(`🚀 Starting Next.js dev server on ${resolvedUrl}`);
+  const hostname = remote ? '0.0.0.0' : 'localhost';
+  console.log(`🚀 Starting Next.js dev server on ${resolvedUrl}${remote ? ' (remote access enabled)' : ''}`);
 
+  const nextArgs = ['next', 'dev', '--hostname', hostname, '--port', resolvedPort.toString(), ...passthrough];
   const child = spawn(
     'npx',
-    ['next', 'dev', '--port', resolvedPort.toString(), ...passthrough],
+    nextArgs,
     {
       cwd: rootDir,
       stdio,
@@ -144,12 +153,13 @@ async function startWebDevServer({
 
 async function runFromCli() {
   const argv = process.argv.slice(2);
-  const { preferredPort, passthrough } = parseCliArgs(argv);
+  const { preferredPort, passthrough, remote } = parseCliArgs(argv);
 
   const { child } = await startWebDevServer({
     preferredPort,
     passthrough,
     stdio: 'inherit',
+    remote,
   });
 
   child.on('error', (error) => {

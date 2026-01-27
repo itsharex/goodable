@@ -75,6 +75,19 @@ type Entry = { path: string; type: 'file'|'dir'; size?: number };
 type ProjectStatus = 'initializing' | 'active' | 'failed';
 type FilePreviewType = 'image' | 'video' | 'pdf' | 'markdown' | 'code';
 
+// Browser-compatible UUID generator (fallback for non-HTTPS or older browsers)
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback implementation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 interface PendingPermission {
   id: string;
   projectId: string;
@@ -483,7 +496,7 @@ export default function ChatPage() {
     setAgentWorkComplete(false);
     localStorage.setItem(`project_${projectId}_taskComplete`, 'false');
 
-    const requestId = crypto.randomUUID();
+    const requestId = generateUUID();
 
     try {
       try { console.log(`已发送初始提示，请求ID=${requestId}`); } catch {}
@@ -2039,7 +2052,7 @@ const persistProjectPreferences = useCallback(
       return false;
     }
 
-    const requestId = crypto.randomUUID();
+    const requestId = generateUUID();
     currentRequestIdRef.current = requestId;  // 保存当前requestId
     setIsRunning(true);
     console.log(`[中断按钮] ===请求开始=== requestId=${requestId}, mode=${mode}, isRunning=true`);
@@ -2808,9 +2821,15 @@ const persistProjectPreferences = useCallback(
                     // Note: stableMessageHandlers.current already has its own add/remove logic
                   }
                 }}
-                onSessionStatusChange={(isRunningValue) => {
-                  console.log(`[中断按钮] onSessionStatusChange 回调触发: ${isRunningValue ? 'true' : 'false'}`);
+                onSessionStatusChange={(isRunningValue, requestId) => {
+                  console.log(`[中断按钮] onSessionStatusChange 回调触发: ${isRunningValue ? 'true' : 'false'}, requestId=${requestId}`);
                   setIsRunning(isRunningValue);
+                  // Sync requestId for multi-window interrupt support
+                  if (isRunningValue && requestId) {
+                    currentRequestIdRef.current = requestId;
+                  } else if (!isRunningValue) {
+                    currentRequestIdRef.current = null;
+                  }
                   console.log(`[中断按钮] setIsRunning(${isRunningValue}) - 来源: onSessionStatusChange`);
                 }}
                 onSseFallbackActive={(active) => {
@@ -2883,6 +2902,7 @@ const persistProjectPreferences = useCallback(
                   start();
                 }}
                 onPermissionRequest={handlePermissionRequest}
+                onPermissionResolved={handlePermissionResolved}
               />
               </ChatErrorBoundary>
             </div>

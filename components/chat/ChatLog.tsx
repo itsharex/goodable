@@ -1174,7 +1174,7 @@ interface PendingPermission {
 
 interface ChatLogProps {
   projectId: string;
-  onSessionStatusChange?: (isRunning: boolean) => void;
+  onSessionStatusChange?: (isRunning: boolean, requestId?: string) => void;
   onProjectStatusUpdate?: (status: string, message?: string) => void;
   onSseFallbackActive?: (active: boolean) => void;
   onAddUserMessage?: (handlers: {
@@ -1193,9 +1193,10 @@ interface ChatLogProps {
   onDemoReplayComplete?: () => void;
   isDemoReplay?: boolean;
   onPermissionRequest?: (permission: PendingPermission) => void;
+  onPermissionResolved?: (permissionId: string, approved: boolean) => void;
 }
 
-export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onFileChange, onDemoStart, onDemoReplayComplete, isDemoReplay, onPermissionRequest }: ChatLogProps) {
+export default function ChatLog({ projectId, onSessionStatusChange, onProjectStatusUpdate, onSseFallbackActive, onAddUserMessage, onPreviewReady, onPreviewError, onPreviewPhaseChange, onFocusInput, onPlanningCompleted, onPlanApproved, onTodoUpdate, onFileChange, onDemoStart, onDemoReplayComplete, isDemoReplay, onPermissionRequest, onPermissionResolved }: ChatLogProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
@@ -1775,10 +1776,20 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
         }
       }
 
+      // Handle permission resolved (multi-window sync)
+      if (resolvedStatus === 'permission_resolved') {
+        const meta = (statusData as any)?.metadata ?? {};
+        const permId = meta?.permissionId;
+        const approved = meta?.approved ?? false;
+        if (permId && onPermissionResolved) {
+          onPermissionResolved(permId, approved);
+        }
+      }
+
       if (resolvedStatus === 'sdk_completed') {
         // Ignore for run-state; preview will start separately
       }
-    }, [onProjectStatusUpdate, onSessionStatusChange]
+    }, [onProjectStatusUpdate, onSessionStatusChange, onPermissionResolved]
   );
 
   useEffect(() => {
@@ -1887,7 +1898,7 @@ export default function ChatLog({ projectId, onSessionStatusChange, onProjectSta
           const payload: RealtimeStatus = { status: 'running', ...(rid ? { requestId: rid } : {}) };
           handleRealtimeStatus('running', payload, rid);
           setIsWaitingForResponse(true);
-          onSessionStatusChange?.(true);
+          onSessionStatusChange?.(true, rid || undefined);  // Pass requestId for multi-window sync
           setIsInPlanMode(false);
           setPendingPlanApproval(null);
           setPendingPlanContent(null);

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePermission, getPermissionById } from '@/lib/services/permissions';
 import { createMessage } from '@/lib/services/message';
+import { streamManager } from '@/lib/services/stream';
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,6 +74,24 @@ export async function POST(request: NextRequest) {
     } catch (msgError) {
       // Log but don't fail the request if message saving fails
       console.error('[API] Failed to save permission message:', msgError);
+    }
+
+    // Broadcast permission resolved event to all windows
+    try {
+      streamManager.publish(permission.projectId, {
+        type: 'status',
+        data: {
+          status: 'permission_resolved',
+          requestId: permission.requestId,
+          metadata: {
+            permissionId,
+            approved,
+            toolName: permission.toolName,
+          },
+        },
+      });
+    } catch (broadcastError) {
+      console.error('[API] Failed to broadcast permission resolved:', broadcastError);
     }
 
     return NextResponse.json({

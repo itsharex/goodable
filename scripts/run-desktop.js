@@ -54,12 +54,13 @@ function waitForUrl(targetUrl, timeoutMs = 30_000, intervalMs = 300) {
 
 async function start() {
   const argv = process.argv.slice(2);
-  const { preferredPort, passthrough } = parseCliArgs(argv);
+  const { preferredPort, passthrough, remote } = parseCliArgs(argv);
 
   const { child: nextProcess, port, url } = await startWebDevServer({
     preferredPort,
     passthrough,
     stdio: 'inherit',
+    remote,
   });
 
   const electronBinary = path.join(

@@ -124,16 +124,9 @@ export class StreamManager {
     const deadControllers: ReadableStreamDefaultController[] = [];
     let sendIndex = 0;
 
-    const shouldTargetLatestOnly =
-      event.type === 'status' && (event.data as any)?.status === 'planning_completed';
-    const latest = this.latestController.get(projectId);
-
+    // Broadcast to all clients (removed latestOnly restriction for multi-window sync)
     const controllersToSend: ReadableStreamDefaultController[] = [];
-    if (shouldTargetLatestOnly && latest && projectStreams.has(latest)) {
-      controllersToSend.push(latest);
-    } else {
-      projectStreams.forEach((c) => controllersToSend.push(c));
-    }
+    projectStreams.forEach((c) => controllersToSend.push(c));
 
     controllersToSend.forEach((controller) => {
       sendIndex++;

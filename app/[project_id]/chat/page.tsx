@@ -9,12 +9,13 @@ import {
   File as FileIcon, FileCode, Palette, Braces, Atom, Workflow, Ship, GitBranch, FileText,
   Database, Coffee, Triangle, Lock, Home, ChevronUp, ChevronRight, ChevronDown,
   ArrowLeft, ArrowRight, RotateCcw, Share2, Type, Bird, Gem, Flame, List, Plus,
-  HelpCircle, Grid, Maximize2, User
+  HelpCircle, Grid, Maximize2, User, QrCode, X as XIcon
 } from 'lucide-react';
 import ChatLog from '@/components/chat/ChatLog';
 import PermissionConfirmCard from '@/components/chat/PermissionConfirmCard';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { EnvironmentSettings } from '@/components/settings/EnvironmentSettings';
+import { QRCodeSVG } from 'qrcode.react';
 import ChatInput from '@/components/chat/ChatInput';
 import TodoBar from '@/components/chat/TodoBar';
 import { ChatErrorBoundary } from '@/components/ErrorBoundary';
@@ -434,6 +435,8 @@ export default function ChatPage() {
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ requestId: string } | null>(null);
   const [mobileViewMode, setMobileViewMode] = useState<'chat' | 'preview'>('chat');
   const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [lanIP, setLanIP] = useState<string | null>(null);
+  const [showQRCode, setShowQRCode] = useState(false);
   const [pendingPermissions, setPendingPermissions] = useState<PendingPermission[]>([]);
   const approvedRequestIdsRef = useRef<Set<string>>(new Set());
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -2669,6 +2672,30 @@ const persistProjectPreferences = useCallback(
     };
   }, []);
 
+  // Fetch LAN IP for mobile access QR code
+  useEffect(() => {
+    const fetchLanIP = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/network/lan-ip`);
+        if (response.ok) {
+          const data = await response.json();
+          setLanIP(data?.data?.primaryIP || null);
+        }
+      } catch (error) {
+        console.error('Failed to fetch LAN IP:', error);
+      }
+    };
+
+    fetchLanIP();
+  }, []);
+
+  // Generate mobile access URL
+  const mobileAccessUrl = useMemo(() => {
+    if (!lanIP) return null;
+    const currentPort = typeof window !== 'undefined' ? window.location.port || '80' : '3000';
+    return `http://${lanIP}:${currentPort}/${projectId}/chat`;
+  }, [lanIP, projectId]);
+
   // Show loading UI if project is initializing
 
   const [isNavigatingHome, setIsNavigatingHome] = useState(false);
@@ -3197,6 +3224,17 @@ const persistProjectPreferences = useCallback(
                       <Smartphone size={14} />
                     </button>
                   </div>
+                  )}
+
+                  {/* Mobile Access QR Code Button - Hide on mobile, always show on desktop */}
+                  {!isMobileDevice && mobileAccessUrl && (
+                    <button
+                      className="h-8 w-8 flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors ml-2"
+                      onClick={() => setShowQRCode(true)}
+                      title="手机访问"
+                    >
+                      <QrCode size={16} />
+                    </button>
                   )}
 
                   {/* Toggle switch */}
@@ -4255,6 +4293,74 @@ const persistProjectPreferences = useCallback(
         </div>
       </div>
 
+      {/* Mobile Access QR Code Modal */}
+      {showQRCode && mobileAccessUrl && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowQRCode(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 shadow-2xl max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">手机打开，远程监工</h3>
+              <button
+                onClick={() => setShowQRCode(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XIcon size={20} />
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-4">
+              {lanIP === '127.0.0.1' || !lanIP ? (
+                <div className="text-center py-8 px-4">
+                  <p className="text-sm text-gray-600 mb-3">
+                    当前为本地地址，无法远程访问
+                  </p>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    请先前往<span className="font-medium text-gray-700">设置中心 → 基本设置</span>，开启远程访问服务
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <QRCodeSVG
+                    value={mobileAccessUrl}
+                    size={160}
+                    level="M"
+                    includeMargin={false}
+                  />
+
+                  <div className="text-center w-full">
+                    <p className="text-sm text-gray-600 mb-2">用手机扫码，随时监工 AI 干活</p>
+                    <p className="text-xs text-gray-400 mb-3">
+                      需先在<span className="text-gray-600">设置中心 → 基本设置</span>开启远程访问服务
+                    </p>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(mobileAccessUrl);
+                          alert('地址已复制');
+                        } catch (error) {
+                          console.error('Failed to copy:', error);
+                        }
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-700 transition-colors px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg w-full"
+                      title={mobileAccessUrl}
+                    >
+                      {(() => {
+                        const currentPort = typeof window !== 'undefined' ? window.location.port || '80' : '3000';
+                        return `${lanIP}:${currentPort}`;
+                      })()}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

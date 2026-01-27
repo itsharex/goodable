@@ -223,6 +223,24 @@ async function startProductionServer() {
     APP_VERSION: APP_VERSION, // Pass version to Next.js subprocess
   };
 
+  // Read server config from global-settings.json
+  try {
+    const userDataDir = app.getPath('userData');
+    const settingsDir = path.join(userDataDir, 'settings');
+    const settingsFile = path.join(settingsDir, 'global-settings.json');
+
+    if (fs.existsSync(settingsFile)) {
+      const content = fs.readFileSync(settingsFile, 'utf8');
+      const settings = JSON.parse(content);
+      if (settings?.server?.allow_remote_access === true) {
+        env.HOSTNAME = '0.0.0.0';
+        console.log('[INFO] Remote access enabled from settings');
+      }
+    }
+  } catch (error) {
+    console.warn('[WARN] Failed to read server config:', error?.message || String(error));
+  }
+
   // Windows: 注入内置 Git 环境变量（Claude SDK 依赖 git-bash）
   if (process.platform === 'win32') {
     const gitRuntimeDir = path.join(process.resourcesPath, 'git-runtime', 'win32-x64');

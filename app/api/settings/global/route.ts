@@ -51,6 +51,16 @@ export async function PUT(request: NextRequest) {
       };
     }
 
+    // Handle server config update
+    const serverRaw = candidate.server;
+    if (serverRaw !== undefined) {
+      if (serverRaw && typeof serverRaw === 'object') {
+        update.server = serverRaw;
+      } else if (serverRaw === null) {
+        update.server = undefined;
+      }
+    }
+
     const nextSettings = await updateGlobalSettings(update);
     return NextResponse.json(serialize(nextSettings));
   } catch (error) {

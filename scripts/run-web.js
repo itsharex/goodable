@@ -8,6 +8,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const dotenv = require('dotenv');
 const { ensureEnvironment } = require('./setup-env');
 const Database = require('better-sqlite3');
@@ -17,6 +18,22 @@ const isWindows = os.platform() === 'win32';
 
 dotenv.config({ path: path.join(rootDir, '.env') });
 dotenv.config({ path: path.join(rootDir, '.env.local') });
+
+function readServerConfig() {
+  try {
+    const dataDir = process.env.SETTINGS_DIR || path.join(rootDir, 'data');
+    const settingsFile = path.join(dataDir, 'global-settings.json');
+
+    if (fs.existsSync(settingsFile)) {
+      const content = fs.readFileSync(settingsFile, 'utf8');
+      const settings = JSON.parse(content);
+      return settings?.server?.allow_remote_access === true;
+    }
+  } catch (error) {
+    // Ignore errors, default to false
+  }
+  return false;
+}
 
 function parseCliArgs(argv) {
   const passthrough = [];
@@ -114,8 +131,12 @@ async function startWebDevServer({
   process.env.WEB_PORT = resolvedPort.toString();
   process.env.NEXT_PUBLIC_APP_URL = resolvedUrl;
 
-  const hostname = remote ? '0.0.0.0' : 'localhost';
-  console.log(`🚀 Starting Next.js dev server on ${resolvedUrl}${remote ? ' (remote access enabled)' : ''}`);
+  // Read config if remote is not explicitly set via CLI
+  const allowRemoteFromConfig = readServerConfig();
+  const shouldUseRemote = remote || allowRemoteFromConfig;
+
+  const hostname = shouldUseRemote ? '0.0.0.0' : 'localhost';
+  console.log(`🚀 Starting Next.js dev server on ${resolvedUrl}${shouldUseRemote ? ' (remote access enabled)' : ''}`);
 
   const nextArgs = ['next', 'dev', '--hostname', hostname, '--port', resolvedPort.toString(), ...passthrough];
   const child = spawn(

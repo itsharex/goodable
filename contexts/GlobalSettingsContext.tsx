@@ -11,6 +11,9 @@ export type GlobalAISettings = {
       [key: string]: unknown;
     };
   };
+  server?: {
+    allow_remote_access: boolean;
+  };
 };
 
 type GlobalSettingsCtx = {

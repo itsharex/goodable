@@ -12,6 +12,9 @@ export interface GlobalSettings {
   default_cli: string;
   cli_settings: CLISettings;
   ai_services?: AIServicesConfig;
+  server?: {
+    allow_remote_access: boolean;
+  };
 }
 
 const DEFAULT_SETTINGS: GlobalSettings = {
@@ -61,6 +64,11 @@ async function readSettingsFile(): Promise<GlobalSettings | null> {
       ? parsed.ai_services
       : undefined;
 
+    // Parse server config if present
+    const server = parsed.server && typeof parsed.server === 'object'
+      ? parsed.server
+      : undefined;
+
     return {
       default_cli: typeof parsed.default_cli === 'string' ? parsed.default_cli : DEFAULT_SETTINGS.default_cli,
       cli_settings: {
@@ -68,6 +76,7 @@ async function readSettingsFile(): Promise<GlobalSettings | null> {
         ...cliSettings,
       },
       ai_services: aiServices,
+      server,
     };
   } catch (error) {
     return null;
@@ -89,6 +98,7 @@ export async function loadGlobalSettings(): Promise<GlobalSettings> {
         ...(existing.cli_settings ?? {}),
       },
       ai_services: existing.ai_services,
+      server: existing.server,
     };
     return merged;
   }
@@ -126,6 +136,7 @@ export async function updateGlobalSettings(partial: Partial<GlobalSettings>): Pr
     default_cli: partial.default_cli ?? current.default_cli,
     cli_settings: { ...current.cli_settings },
     ai_services: partial.ai_services !== undefined ? partial.ai_services : current.ai_services,
+    server: partial.server !== undefined ? partial.server : current.server,
   };
 
   if (cliSettings) {
